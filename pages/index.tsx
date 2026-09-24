@@ -1,283 +1,233 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Wind, Waves, Thermometer, Sunrise, Sunset, ArrowUp, ArrowDown, RefreshCw, MapPin, Fish, Anchor,
-} from 'lucide-react';
-import { fetchMarineData, MarineData } from '@/services/marineApi';
-import {
-  findExtremes, currentIndex, toLocalMs, nowLocalMs, fmtTime, fmtDay, dayKey, compass,
-  seaState, fishingScore, scoreLabel, TideExtreme,
-} from '@/services/tides';
+import { useMemo } from 'react';
+import Link from 'next/link';
+import { ArrowDown, ArrowUp, ChevronRight, Droplets, Eye, ExternalLink, Fish, Navigation2, Phone, Sunrise, Sunset, Thermometer, Waves, Wind } from 'lucide-react';
+import { AppShell } from '@/components/AppShell';
+import { TideChart } from '@/components/TideChart';
+import { MoonIcon } from '@/components/MoonIcon';
+import { WeatherIcon } from '@/components/WeatherIcon';
+import { ErrorState, LoadingScreen, OfflineBanner, SectionTitle, SourceTag, toneDot, Val } from '@/components/ui';
+import { useSpot } from '@/lib/SpotContext';
+import { useConditions } from '@/lib/useConditions';
+import { useT } from '@/lib/i18n/LangContext';
+import { contactLabel, spotArea, spotName } from '@/lib/i18n/place';
+import { findExtremes, hourIndex, levelAt, trendKey } from '@/lib/marine/tides';
+import { fishingHours, fishingLabel, fishingWindows, seaSummary } from '@/lib/marine/assess';
+import { moonAt } from '@/lib/marine/moon';
+import { compassKey, weatherInfo } from '@/lib/marine/weather';
+import { dayKey, fmtTime, nowLocalMs, untilMsg } from '@/lib/marine/time';
 
-interface Spot { name: string; ar: string; lat: number; lon: number }
-
-const SPOTS: Record<string, Spot> = {
-  dubai: { name: 'Dubai', ar: 'دبي', lat: 25.0867, lon: 55.1264 },
-  abudhabi: { name: 'Abu Dhabi', ar: 'أبوظبي', lat: 24.4794, lon: 54.3673 },
-  alrams: { name: 'Al Rams', ar: 'الرمس', lat: 25.8076, lon: 55.9463 },
-  fujairah: { name: 'Fujairah', ar: 'الفجيرة', lat: 25.1167, lon: 56.3333 },
-  khorfakkan: { name: 'Khor Fakkan', ar: 'خورفكان', lat: 25.3533, lon: 56.3267 },
+const heroTone: Record<string, string> = {
+  good: 'from-[#06283D] via-[#07384F] to-[#0B5A5E]',
+  ok: 'from-[#06283D] via-[#083550] to-[#0E4F6B]',
+  caution: 'from-[#2A2410] via-[#3A2F0E] to-[#5A4410]',
+  bad: 'from-[#3A0F12] via-[#4A1417] to-[#5E1B1B]',
+  unknown: 'from-[#06283D] to-[#0E3B55]',
 };
-
-const toneClasses: Record<string, string> = {
-  good: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-  ok: 'bg-sky-50 text-sky-800 border-sky-200',
-  caution: 'bg-amber-50 text-amber-800 border-amber-200',
-  bad: 'bg-rose-50 text-rose-800 border-rose-200',
-};
-
-function TideChart({ data, idx, extremes }: { data: MarineData; idx: number; extremes: TideExtreme[] }) {
-  const hours = 25;
-  const start = Math.max(0, idx - 2);
-  const pts = data.seaLevel.slice(start, start + hours).map((v) => v ?? 0);
-  if (pts.length < 3) return null;
-  const W = 340, H = 120, pad = 14;
-  const min = Math.min(...pts) - 0.1, max = Math.max(...pts) + 0.1;
-  const x = (i: number) => pad + (i / (pts.length - 1)) * (W - pad * 2);
-  const y = (v: number) => H - pad - ((v - min) / (max - min)) * (H - pad * 2);
-  const line = pts.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-  const area = `${line} L${x(pts.length - 1)},${H} L${x(0)},${H} Z`;
-  const startMs = toLocalMs(data.time[start]);
-  const endMs = startMs + (pts.length - 1) * 3600e3;
-  const xAt = (ms: number) => pad + ((ms - startMs) / (endMs - startMs)) * (W - pad * 2);
-  const nowX = xAt(nowLocalMs());
-  const visible = extremes.filter((e) => e.at >= startMs && e.at <= endMs);
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H + 18}`} className="w-full" role="img" aria-label="Tide curve for the next 24 hours">
-      <defs>
-        <linearGradient id="tideFill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.02" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill="url(#tideFill)" />
-      <path d={line} fill="none" stroke="#0284c7" strokeWidth="2.2" strokeLinejoin="round" />
-      {visible.map((e) => (
-        <g key={e.at}>
-          <circle cx={xAt(e.at)} cy={y(e.height)} r="3.5" fill={e.type === 'high' ? '#0369a1' : '#f59e0b'} />
-          <text x={xAt(e.at)} y={e.type === 'high' ? y(e.height) - 7 : y(e.height) + 14}
-            textAnchor="middle" fontSize="9.5" fill="#334155" fontWeight="600">{fmtTime(e.at)}</text>
-        </g>
-      ))}
-      <line x1={nowX} x2={nowX} y1={4} y2={H} stroke="#0f172a" strokeDasharray="3 3" strokeWidth="1" />
-      <text x={nowX} y={H + 13} textAnchor="middle" fontSize="10" fill="#0f172a" fontWeight="700">Now</text>
-    </svg>
-  );
-}
 
 export default function Home() {
-  const [spotKey, setSpotKey] = useState('dubai');
-  const [data, setData] = useState<MarineData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [updated, setUpdated] = useState<number | null>(null);
-  const spot = SPOTS[spotKey];
+  const { spot, region } = useSpot();
+  const { t, tm, lang } = useT();
+  const cond = useConditions(spot.id);
+  const { data } = cond;
+  const dir = (deg: number | null | undefined) => { const k = compassKey(deg); return k ? t(k) : '—'; };
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setData(await fetchMarineData(spot.lat, spot.lon));
-      setUpdated(nowLocalMs());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load data');
-    } finally {
-      setLoading(false);
-    }
-  }, [spot.lat, spot.lon]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const view = useMemo(() => {
-    if (!data || !data.time?.length) return null;
-    const idx = currentIndex(data.time);
-    const now = nowLocalMs();
-    const extremes = findExtremes(data.time, data.seaLevel);
-    const upcoming = extremes.filter((e) => e.at > now);
-    const nextHigh = upcoming.find((e) => e.type === 'high');
-    const nextLow = upcoming.find((e) => e.type === 'low');
-    const lvl = data.seaLevel[idx] ?? 0;
-    const lvlNext = data.seaLevel[idx + 1] ?? lvl;
-    const rate = lvlNext - lvl;
-    const trend = Math.abs(rate) < 0.03 ? 'Slack' : rate > 0 ? 'Rising' : 'Falling';
-    const wind = data.windSpeed[idx] ?? 0;
-    const gust = data.windGusts[idx] ?? wind;
-    const wave = data.waveHeight[idx] ?? 0;
-    const sunEvents = [...data.sunrise, ...data.sunset].map(toLocalMs);
-    const minsToSun = Math.min(...sunEvents.map((t) => Math.abs(t - now) / 60000));
-    const score = fishingScore({ windKn: wind, waveM: wave, tideRateMPerHr: rate, minutesToSunEvent: minsToSun });
+  const v = useMemo(() => {
+    if (!data) return null;
+    const h = data.hourly;
+    const now = nowLocalMs(data.utcOffsetSeconds);
+    const i = hourIndex(h.time, now);
+    const extremes = findExtremes(h.time, h.seaLevel);
+    const upcoming = extremes.filter((e) => e.at > now).slice(0, 2);
+    const summary = seaSummary(data, i);
+    const hours = fishingHours(data);
     const today = dayKey(now);
-    const todayIdx = Math.max(0, data.sunrise.findIndex((s) => s.startsWith(today)));
-
-    const byDay: { key: string; label: string; items: TideExtreme[] }[] = [];
-    extremes.forEach((e) => {
-      const k = dayKey(e.at);
-      let g = byDay.find((d) => d.key === k);
-      if (!g) { g = { key: k, label: fmtDay(e.at), items: [] }; byDay.push(g); }
-      g.items.push(e);
-    });
-
+    const d = Math.max(0, data.daily.date.indexOf(today));
     return {
-      idx, extremes, nextHigh, nextLow, lvl, trend, wind, gust, wave,
-      windDir: compass(data.windDirection[idx] ?? 0),
-      sst: data.seaTemp[idx],
-      sea: seaState(wind, gust, wave),
-      score,
-      sunrise: data.sunrise[todayIdx]?.slice(11, 16),
-      sunset: data.sunset[todayIdx]?.slice(11, 16),
-      days: byDay.filter((d) => d.key >= today),
+      now, i, extremes, upcoming, summary,
+      fishNow: hours[i]?.score ?? null,
+      window: fishingWindows(data, hours, today, now, 1)[0] ?? fishingWindows(data, hours, dayKey(now + 864e5), now, 1)[0],
+      level: levelAt(h.time, h.seaLevel, now),
+      wx: weatherInfo(h.weatherCode[i]),
+      moon: moonAt(Date.now()),
+      sunrise: data.daily.sunrise[d]?.slice(11, 16),
+      sunset: data.daily.sunset[d]?.slice(11, 16),
     };
   }, [data]);
 
+  const h = data?.hourly;
+  const coastGuard = region.emergency.find((e) => /coast/i.test(e.label));
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-10">
-      <header className="sticky top-0 z-10 bg-gradient-to-b from-sky-900 to-sky-800 text-white pt-safe shadow-md">
-        <div className="max-w-xl mx-auto px-4 pt-4 pb-3">
-          <div className="flex items-end justify-between">
-            <div>
-              <h1 className="text-2xl font-extrabold tracking-tight leading-none">
-                Bahrna <span className="font-semibold text-sky-200 text-xl" lang="ar">بحرنا</span>
-              </h1>
-              <p className="text-sky-200 text-xs mt-1">Tides, sea &amp; fishing — UAE</p>
-            </div>
-            <button onClick={load} aria-label="Refresh"
-              className="flex items-center gap-1 text-xs text-sky-100 bg-white/10 active:bg-white/20 rounded-full px-3 py-1.5">
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              {updated ? fmtTime(updated) : '--:--'}
-            </button>
-          </div>
-          <div className="mt-3 -mx-4 px-4 flex gap-2 overflow-x-auto no-scrollbar">
-            {Object.entries(SPOTS).map(([k, s]) => (
-              <button key={k} onClick={() => setSpotKey(k)}
-                className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
-                  k === spotKey ? 'bg-white text-sky-900' : 'bg-white/10 text-sky-50 active:bg-white/20'}`}>
-                {s.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      </header>
+    <AppShell status={{ refreshing: cond.refreshing, updatedAt: data?.fetchedAt, utcOffsetSeconds: data?.utcOffsetSeconds, onRefresh: cond.refresh }}>
+      <div className="space-y-3 pb-20">
+        {cond.offline && data && <OfflineBanner savedAt={data.fetchedAt} />}
+        {cond.status === 'loading' && <LoadingScreen />}
+        {cond.status === 'error' && <ErrorState errorKey={cond.error} onRetry={cond.refresh} />}
 
-      <main className="max-w-xl mx-auto px-4 pt-4 space-y-4">
-        <div className="flex items-center gap-1.5 text-sm text-slate-500">
-          <MapPin size={15} /> {spot.name} <span lang="ar">· {spot.ar}</span>
-        </div>
-
-        {loading && !view && (
-          <div className="py-24 text-center text-slate-500">
-            <RefreshCw className="mx-auto animate-spin mb-3" /> Loading live sea data…
-          </div>
-        )}
-
-        {error && (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800 text-sm">
-            Couldn&apos;t load data: {error}
-            <button onClick={load} className="block mt-2 font-semibold underline">Try again</button>
-          </div>
-        )}
-
-        {view && (
+        {data && v && h && (
           <>
-            {/* Tide now */}
-            <section className="rounded-2xl bg-white shadow-sm border border-slate-200 p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Tide now</p>
-                  <p className="text-3xl font-bold mt-1 flex items-center gap-2">
-                    {view.trend === 'Rising' && <ArrowUp className="text-sky-600" />}
-                    {view.trend === 'Falling' && <ArrowDown className="text-amber-500" />}
-                    {view.trend}
-                  </p>
-                  <p className="text-sm text-slate-500 mt-0.5">{view.lvl >= 0 ? '+' : ''}{view.lvl.toFixed(2)} m vs mean sea level</p>
+            {/* HERO — today on the water, with the tide as the horizon */}
+            <section className={`animate-rise relative overflow-hidden rounded-3xl bg-gradient-to-br ${heroTone[v.summary.tone]} text-white shadow-lg`}>
+              <div className="px-5 pt-5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">{t('today_on_water')}</p>
+                  <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/70">{t('src_calc')}</span>
                 </div>
-                <div className="text-right text-sm space-y-1.5">
-                  {view.nextHigh && (
-                    <div><span className="text-slate-500">Next high </span>
-                      <span className="font-bold text-sky-700">{fmtTime(view.nextHigh.at)}</span></div>
-                  )}
-                  {view.nextLow && (
-                    <div><span className="text-slate-500">Next low </span>
-                      <span className="font-bold text-amber-600">{fmtTime(view.nextLow.at)}</span></div>
-                  )}
-                </div>
-              </div>
-              <div className="mt-3">
-                <TideChart data={data!} idx={view.idx} extremes={view.extremes} />
-              </div>
-            </section>
+                <h2 className="mt-2 flex items-center gap-2.5 font-display text-[34px] font-bold uppercase leading-[1.05] tracking-tight">
+                  <span className={`h-3 w-3 shrink-0 rounded-full ${v.summary.tone === 'ok' ? 'bg-shallows' : toneDot[v.summary.tone]} ring-4 ring-white/10`} />
+                  {t(v.summary.level)}
+                </h2>
+                <p className="mt-1.5 text-sm text-white/70">{v.summary.reasons.map(tm).join(' · ')}</p>
 
-            {/* Sea state + fishing */}
-            <section className="grid grid-cols-2 gap-3">
-              <div className={`rounded-2xl border p-4 ${toneClasses[view.sea.tone]}`}>
-                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide opacity-80">
-                  <Anchor size={14} /> Boating
-                </div>
-                <p className="font-bold mt-2 leading-snug">{view.sea.label}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  <Fish size={14} /> Fishing
-                </div>
-                <p className="mt-1"><span className="text-3xl font-bold">{view.score}</span>
-                  <span className="text-slate-400 text-sm">/100</span></p>
-                <p className="text-sm font-semibold text-sky-700">{scoreLabel(view.score)}</p>
-              </div>
-            </section>
-
-            {/* Conditions */}
-            <section className="grid grid-cols-2 gap-3">
-              <Stat icon={<Wind size={16} />} label="Wind" value={`${Math.round(view.wind)} kn ${view.windDir}`}
-                sub={`Gusts ${Math.round(view.gust)} kn`} />
-              <Stat icon={<Waves size={16} />} label="Waves" value={`${view.wave.toFixed(1)} m`} sub="Significant height" />
-              <Stat icon={<Thermometer size={16} />} label="Sea temp"
-                value={view.sst != null ? `${view.sst.toFixed(1)}°C` : '—'} sub="Surface" />
-              <Stat icon={<Sunrise size={16} />} label="Sun" value={`${view.sunrise ?? '--'}`}
-                sub={<span className="flex items-center gap-1"><Sunset size={13} /> {view.sunset ?? '--'}</span>} />
-            </section>
-
-            {/* 7-day tides */}
-            <section className="rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
-              <h2 className="px-4 pt-4 pb-2 font-bold">Tide times — 7 days</h2>
-              <ul className="divide-y divide-slate-100">
-                {view.days.map((d) => (
-                  <li key={d.key} className="px-4 py-3 flex items-start gap-3">
-                    <span className="w-24 shrink-0 text-sm font-semibold text-slate-600">{d.label}</span>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                      {d.items.map((e) => (
-                        <span key={e.at} className="flex items-center gap-1 tabular-nums">
-                          {e.type === 'high'
-                            ? <ArrowUp size={13} className="text-sky-600" />
-                            : <ArrowDown size={13} className="text-amber-500" />}
-                          <span className="font-semibold">{fmtTime(e.at)}</span>
-                          <span className="text-slate-400 text-xs">{e.height.toFixed(2)}m</span>
-                        </span>
-                      ))}
+                <dl className="mt-4 grid grid-cols-4 gap-2">
+                  {([
+                    ['wind', v.summary.windMin != null ? `${Math.round(v.summary.windMin)}–${Math.round(v.summary.windMax!)}` : null, t('unit_kn')],
+                    ['waves', v.summary.waveMax != null ? v.summary.waveMax.toFixed(1) : null, t('unit_m')],
+                    ['tide', v.summary.trend ? t(trendKey(v.summary.trend)) : null, ''],
+                    ['fishing', v.fishNow != null ? t(fishingLabel(v.fishNow)) : null, ''],
+                  ] as const).map(([label, value, unit]) => (
+                    <div key={label}>
+                      <dt className="text-[10px] font-semibold uppercase tracking-wider text-white/50">{t(label)}</dt>
+                      <dd className="mt-1 font-display text-[22px] font-semibold leading-none tabular-nums">
+                        <bdi>{value ?? '—'}</bdi><span className="ms-0.5 text-xs font-medium text-white/60">{value ? unit : ''}</span>
+                      </dd>
                     </div>
+                  ))}
+                </dl>
+              </div>
+              <div className="mt-2">
+                <TideChart data={data} from={v.now - 3 * 3600e3} to={v.now + 21 * 3600e3} extremes={v.extremes} nowMs={v.now} variant="dark" height={112} />
+              </div>
+              <div className="flex items-center justify-between gap-2 bg-black/20 px-5 py-2.5 text-[11px] text-white/60">
+                <span>{t('hero_foot')}</span>
+                <a href={region.officialForecast.url} target="_blank" rel="noreferrer" className="flex shrink-0 items-center gap-1 font-semibold text-shallows">
+                  {t('official_forecast')} <ExternalLink size={11} />
+                </a>
+              </div>
+            </section>
+
+            {/* TIDE */}
+            <section className="card p-4">
+              <div className="flex items-center justify-between">
+                <p className="eyebrow">{t('tide')}</p>
+                <SourceTag kind="live" />
+              </div>
+              <p className="readout mt-2 text-[40px]">{v.summary.trend ? t(trendKey(v.summary.trend)) : '—'}</p>
+              <p className="muted mt-1 text-sm"><Val v={v.level}>{v.level != null && t('vs_msl', { v: `${v.level >= 0 ? '+' : ''}${v.level.toFixed(2)}` })}</Val></p>
+              <ul className="mt-3 divide-y divide-slate-100 dark:divide-white/10">
+                {v.upcoming.length === 0 && <li className="muted py-2 text-sm">{t('no_turning')}</li>}
+                {v.upcoming.map((e) => (
+                  <li key={e.at} className="flex items-center justify-between gap-2 py-2.5">
+                    <span className="flex items-center gap-2 font-medium">
+                      {e.type === 'high' ? <ArrowUp size={16} className="text-lagoon" /> : <ArrowDown size={16} className="text-buoy" />}
+                      {t(e.type === 'high' ? 'high_tide' : 'low_tide')}
+                    </span>
+                    <span className="text-end">
+                      <span className="readout text-2xl">{fmtTime(e.at)}</span>
+                      <span className="muted ms-2 text-xs">{e.height.toFixed(2)} {t('unit_m')} · {tm(untilMsg(e.at, v.now))}</span>
+                    </span>
                   </li>
                 ))}
               </ul>
             </section>
 
-            <p className="text-xs text-slate-400 leading-relaxed px-1">
-              Forecast data from Open-Meteo (model-based, not official tide tables). Times are UAE time.
-              The fishing score is a rule of thumb, not a guarantee. Always check official marine
-              forecasts (NCM) and follow UAE maritime and fishing regulations before going out.
-            </p>
+            {/* CONDITIONS GRID */}
+            <SectionTitle right={<SourceTag kind="live" />}>{t('right_now')}</SectionTitle>
+            <section className="grid grid-cols-2 gap-3">
+              <Tile icon={<Wind size={16} />} label={t('wind')}>
+                <Val v={h.windSpeed[v.i]}>
+                  <p className="readout text-[34px]">{Math.round(h.windSpeed[v.i]!)}<Unit>{t('unit_kn')}</Unit></p>
+                  <p className="muted mt-1 flex items-center gap-1 text-xs">
+                    <Navigation2 size={13} className="shrink-0 text-lagoon" style={{ transform: `rotate(${(h.windDirection[v.i] ?? 0) + 180}deg)` }} aria-hidden="true" />
+                    {t('from_dir', { d: dir(h.windDirection[v.i]) })} · {t('gusts', { v: h.windGusts[v.i] != null ? Math.round(h.windGusts[v.i]!) : '—' })}
+                  </p>
+                </Val>
+              </Tile>
+              <Tile icon={<Waves size={16} />} label={t('waves')}>
+                <Val v={h.waveHeight[v.i]}>
+                  <p className="readout text-[34px]">{h.waveHeight[v.i]!.toFixed(1)}<Unit>{t('unit_m')}</Unit></p>
+                  <p className="muted mt-1 text-xs">{h.wavePeriod[v.i] != null ? t('period', { v: h.wavePeriod[v.i]!.toFixed(0) }) : t('period_na')} · {t('wave_from', { d: dir(h.waveDirection[v.i]) })}</p>
+                </Val>
+              </Tile>
+              <Tile icon={<WeatherIcon kind={v.wx?.kind} size={16} />} label={t('weather')}>
+                <Val v={h.airTemp[v.i]}>
+                  <p className="readout text-[34px]">{Math.round(h.airTemp[v.i]!)}<Unit>°C</Unit></p>
+                  <p className="muted mt-1 text-xs">{v.wx ? t(v.wx.key) : '—'}{h.precipProb[v.i] ? ` · ${t('rain_pct', { v: h.precipProb[v.i]! })}` : ''}</p>
+                </Val>
+              </Tile>
+              <Tile icon={<Thermometer size={16} />} label={t('sea_temp')}>
+                <Val v={h.seaTemp[v.i]}>
+                  <p className="readout text-[34px]">{h.seaTemp[v.i]!.toFixed(1)}<Unit>°C</Unit></p>
+                  <p className="muted mt-1 text-xs">{t('surface')}</p>
+                </Val>
+              </Tile>
+              <Tile icon={<Droplets size={16} />} label={t('humidity')}>
+                <Val v={h.humidity[v.i]}><p className="readout text-[34px]">{Math.round(h.humidity[v.i]!)}<Unit>%</Unit></p></Val>
+              </Tile>
+              <Tile icon={<Eye size={16} />} label={t('visibility')}>
+                <Val v={h.visibility[v.i]}>
+                  <p className="readout text-[34px]"><bdi>{h.visibility[v.i]! >= 10000 ? '10+' : (h.visibility[v.i]! / 1000).toFixed(1)}</bdi><Unit>{t('unit_km')}</Unit></p>
+                </Val>
+              </Tile>
+              <Tile icon={<Sunrise size={16} />} label={t('sun')}>
+                <p className="readout text-[28px]">{v.sunrise ?? '—'}</p>
+                <p className="muted mt-1 flex items-center gap-1 text-xs"><Sunset size={13} /> {t('sunset_at', { v: v.sunset ?? '—' })}</p>
+              </Tile>
+              <Tile icon={null} label={t('moon')} tag="calc">
+                <div className="flex items-center gap-3">
+                  <MoonIcon fraction={v.moon.fraction} size={40} />
+                  <div>
+                    <p className="text-sm font-semibold leading-tight">{t(v.moon.name)}</p>
+                    <p className="muted text-xs">{t('lit', { v: Math.round(v.moon.illumination * 100) })}</p>
+                  </div>
+                </div>
+              </Tile>
+            </section>
+
+            {/* FISHING TEASER */}
+            <Link href="/fishing" className="card tap flex items-center gap-4 p-4">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-lagoon/10 text-lagoon dark:text-shallows"><Fish size={24} /></span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2"><span className="eyebrow">{t('best_window')}</span><SourceTag kind="calc" /></span>
+                {v.window ? (
+                  <span className="mt-1 block">
+                    <span className="readout block text-[28px]">{fmtTime(v.window.start)}–{fmtTime(v.window.end)}</span>
+                    <span className="muted mt-0.5 block text-sm">{t(dayKey(v.window.start) === dayKey(v.now) ? 'today' : 'tomorrow')} · {t(v.window.label)}</span>
+                  </span>
+                ) : <span className="muted block text-sm">{t('no_window')}</span>}
+              </span>
+              <ChevronRight className="shrink-0 text-slate-400 rtl:rotate-180" />
+            </Link>
+
+            {/* SAFETY + SOURCES */}
+            <section className="space-y-2 px-1 pt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+              {coastGuard && (
+                <a href={`tel:${coastGuard.number}`} className="tap flex items-center justify-between rounded-2xl border border-bad/20 bg-bad/5 px-4 py-3 text-sm font-semibold text-bad">
+                  <span className="flex items-center gap-2"><Phone size={16} /> {t('emergency_sea', { label: contactLabel(coastGuard, lang) })}</span>
+                  <span className="font-display text-xl">{coastGuard.number}</span>
+                </a>
+              )}
+              <p>{t('footer_src', { src: data.source.name, place: spotArea(spot, lang) ?? spotName(spot, lang) })}</p>
+            </section>
           </>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
 
-function Stat({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub: React.ReactNode }) {
+function Unit({ children }: { children: React.ReactNode }) {
+  return <span className="ms-1 font-sans text-sm font-medium text-slate-400">{children}</span>;
+}
+
+function Tile({ icon, label, children, tag }: { icon: React.ReactNode; label: string; children: React.ReactNode; tag?: 'calc' }) {
   return (
-    <div className="rounded-2xl bg-white border border-slate-200 p-4">
-      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {icon} {label}
+    <div className="card p-4">
+      <div className="flex items-center justify-between">
+        <p className="eyebrow flex items-center gap-1.5">{icon}{label}</p>
+        {tag && <SourceTag kind={tag} />}
       </div>
-      <p className="text-xl font-bold mt-1.5">{value}</p>
-      <div className="text-xs text-slate-500 mt-0.5">{sub}</div>
+      <div className="mt-2.5">{children}</div>
     </div>
   );
 }
