@@ -1,7 +1,7 @@
 {
-  "name": "baharna-app",
+  "name": "bahrna-app",
   "version": "0.2.0",
-  "description": "Baharna (بحرنا) - live tides, sea conditions and fishing outlook for the UAE",
+  "description": "Bahrna (بحرنا) - live tides, sea conditions and fishing outlook for the UAE",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -1,4 +1,4 @@
-# Baharna · بحرنا
+# Bahrna · بحرنا
 
 Live tides, sea conditions and a fishing outlook for UAE waters (Dubai default, plus Abu Dhabi, Al Rams, Fujairah, Khor Fakkan).
 
