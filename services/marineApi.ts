@@ -1,5 +1,5 @@
 /**
- * Baharna data service — Open-Meteo (free, no API key).
+ * Bahrna data service — Open-Meteo (free, no API key).
  * Marine API: sea level (tide), waves, sea surface temperature.
  * Forecast API: wind (knots), sunrise / sunset.
  * All times are returned in Asia/Dubai local time (UTC+4, no DST).
