@@ -136,7 +136,7 @@ export default function Home() {
           <div className="flex items-end justify-between">
             <div>
               <h1 className="text-2xl font-extrabold tracking-tight leading-none">
-                Baharna <span className="font-semibold text-sky-200 text-xl" lang="ar">بحرنا</span>
+                Bahrna <span className="font-semibold text-sky-200 text-xl" lang="ar">بحرنا</span>
               </h1>
               <p className="text-sky-200 text-xs mt-1">Tides, sea &amp; fishing — UAE</p>
             </div>

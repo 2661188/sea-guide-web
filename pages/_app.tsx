@@ -9,13 +9,13 @@ export default function App({ Component, pageProps }: AppProps) {
   return (
     <>
       <Head>
-        <title>Baharna · بحرنا — UAE tides &amp; sea</title>
+        <title>Bahrna · بحرنا — UAE tides &amp; sea</title>
         <meta name="description" content="Live tides, wind, waves and fishing outlook for UAE waters." />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="theme-color" content="#0c4a6e" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Baharna" />
+        <meta name="apple-mobile-web-app-title" content="Bahrna" />
         <link rel="icon" href={icon} />
       </Head>
       <Component {...pageProps} />
