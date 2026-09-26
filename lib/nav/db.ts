@@ -15,7 +15,10 @@ export interface Trip {
   maxKn: number;
   points: number;
 }
-export interface Waypoint { id: string; name: string; kind: 'spot' | 'marina' | 'ramp' | 'fav' | 'mark'; lat: number; lon: number; at: number }
+export type WpKind = 'mark' | 'fish' | 'dive' | 'marina' | 'ramp' | 'anchor' | 'fuel' | 'hazard' | 'fav' | 'spot';
+export interface Waypoint { id: string; name: string; kind: WpKind; lat: number; lon: number; at: number; notes?: string; depth?: number | null }
+export interface RoutePoint { lat: number; lon: number; name?: string; wpId?: string }
+export interface Route { id: string; name: string; points: RoutePoint[]; createdAt: number; updatedAt: number; notes?: string }
 
 const DB = 'bahrna-nav';
 let dbp: Promise<IDBDatabase> | null = null;
@@ -23,15 +26,19 @@ let dbp: Promise<IDBDatabase> | null = null;
 function open(): Promise<IDBDatabase> {
   if (dbp) return dbp;
   dbp = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1);
-    req.onupgradeneeded = () => {
+    const req = indexedDB.open(DB, 2);
+    req.onupgradeneeded = (e) => {
       const db = req.result;
-      db.createObjectStore('trips', { keyPath: 'id' });
-      const pts = db.createObjectStore('points', { autoIncrement: true });
-      pts.createIndex('trip', 'tripId');
-      db.createObjectStore('waypoints', { keyPath: 'id' });
+      if (e.oldVersion < 1) {
+        db.createObjectStore('trips', { keyPath: 'id' });
+        const pts = db.createObjectStore('points', { autoIncrement: true });
+        pts.createIndex('trip', 'tripId');
+        db.createObjectStore('waypoints', { keyPath: 'id' });
+      }
+      if (e.oldVersion < 2) db.createObjectStore('routes', { keyPath: 'id' });
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onblocked = () => { /* another tab has the old version open; it will close on reload */ };
+    req.onsuccess = () => { const db = req.result; db.onversionchange = () => { db.close(); dbp = null; }; resolve(db); };
     req.onerror = () => { dbp = null; reject(req.error); };
   });
   return dbp;
@@ -70,5 +77,17 @@ export async function deleteTrip(id: string) {
 export const putWaypoint = (w: Waypoint) => tx<void>('waypoints', 'readwrite', (s) => { s.put(w); });
 export const allWaypoints = () => tx<Waypoint[]>('waypoints', 'readonly', (s) => s.getAll()).then((l) => l.sort((a, b) => b.at - a.at));
 export const deleteWaypoint = (id: string) => tx<void>('waypoints', 'readwrite', (s) => { s.delete(id); });
+
+export const putRoute = (r: Route) => tx<void>('routes', 'readwrite', (s) => { s.put(r); });
+export const getRoute = (id: string) => tx<Route | undefined>('routes', 'readonly', (s) => s.get(id));
+export const allRoutes = () => tx<Route[]>('routes', 'readonly', (s) => s.getAll()).then((l) => l.sort((a, b) => b.updatedAt - a.updatedAt));
+export const deleteRoute = (id: string) => tx<void>('routes', 'readwrite', (s) => { s.delete(id); });
+
+/** Tell open screens that saved waypoints/routes/trips changed (e.g. after an import). */
+export function notifyNavData() { if (typeof window !== 'undefined') window.dispatchEvent(new Event('bahrna:navdata')); }
+export function onNavData(fn: () => void) {
+  window.addEventListener('bahrna:navdata', fn);
+  return () => window.removeEventListener('bahrna:navdata', fn);
+}
 
 export const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;

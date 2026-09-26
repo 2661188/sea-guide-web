@@ -28,6 +28,7 @@ let watchId: number | null = null;
 let lastRec: TrackPoint | null = null;
 let wakeLock: { release: () => Promise<void> } | null = null;
 let initDone = false;
+const holds = new Set<string>(); // other features that need GPS on (route guidance, anchor alarm)
 
 function emit(patch: Partial<TrackerState>) {
   state = { ...state, ...patch };
@@ -49,6 +50,7 @@ function onFix(p: GeolocationPosition) {
   if (speedKn == null && prev) {
     const dt = (p.timestamp - prev.t) / 3600e3;
     if (dt > 0) speedKn = distanceNm(prev, { lat, lon }) / dt;
+    if (speedKn != null && speedKn > 70) speedKn = null; // GPS jump, not real speed
   }
   let cog = heading != null && !Number.isNaN(heading) && (speedKn ?? 0) > 0.8 ? heading : null;
   if (cog == null && prev && distanceNm(prev, { lat, lon }) > MIN_MOVE_NM) cog = bearing(prev, { lat, lon });
@@ -99,8 +101,18 @@ function stopWatch() {
 
 /** Stop GPS when no trip is running (saves battery when leaving Navigate). */
 export function releaseGps() {
-  if (!state.trip) { stopWatch(); emit({ gps: 'off' }); }
+  if (!state.trip && holds.size === 0) { stopWatch(); emit({ gps: 'off' }); }
 }
+
+/** Keep GPS (and the screen) on for a feature such as route guidance or the anchor alarm. */
+export function holdGps(key: string, on: boolean) {
+  if (on) { holds.add(key); startGps(); keepAwake(true); return; }
+  holds.delete(key);
+  if (!state.trip && holds.size === 0) keepAwake(false);
+}
+
+export const getTracker = () => state;
+export function subscribeTracker(fn: (s: TrackerState) => void) { subs.add(fn); return () => { subs.delete(fn); }; }
 
 export async function startTrip(activity: string, name: string) {
   const trip: Trip = {
@@ -123,7 +135,7 @@ export async function endTrip(): Promise<Trip | null> {
   await putTrip(done).catch(() => {});
   lastRec = null;
   emit({ trip: null, track: [], returning: false });
-  keepAwake(false);
+  if (holds.size === 0) keepAwake(false);
   return done;
 }
 
@@ -133,7 +145,7 @@ export const setReturning = (on: boolean) => emit({ returning: on });
 async function init() {
   if (initDone || typeof window === 'undefined') return;
   initDone = true;
-  document.addEventListener('visibilitychange', () => { if (state.trip) keepAwake(document.visibilityState === 'visible'); });
+  document.addEventListener('visibilitychange', () => { if (state.trip || holds.size) keepAwake(document.visibilityState === 'visible'); });
   try {
     const active = (await allTrips()).find((t) => t.status === 'active');
     if (!active) return;
