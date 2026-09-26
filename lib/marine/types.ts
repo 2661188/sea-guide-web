@@ -27,6 +27,7 @@ export interface Conditions {
     visibility: Num[]; // m
     weatherCode: Num[]; // WMO code
     precipProb: Num[]; // %
+    uv: Num[]; // UV index
   };
   daily: {
     date: string[]; // local "YYYY-MM-DD"
@@ -37,4 +38,21 @@ export interface Conditions {
 
 export interface ConditionsError {
   error: string;
+}
+
+/** Tide summary for one station (map). Times are local ms. */
+export interface StationTide {
+  id: string;
+  level: number | null;
+  trend: 'Rising' | 'Falling' | 'Slack' | null;
+  next: { type: 'high' | 'low'; at: number; height: number }[];
+  range: number | null; // today's high minus low, m
+  series: Num[]; // next 24 hourly levels
+}
+
+export interface StationsResponse {
+  fetchedAt: string;
+  utcOffsetSeconds: number;
+  nowLocal: number;
+  stations: StationTide[];
 }
