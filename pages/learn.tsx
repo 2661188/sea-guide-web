@@ -29,9 +29,11 @@ export default function Learn() {
         </a>
 
         <SectionTitle>{t('coming_next')}</SectionTitle>
+        <div className="grid gap-3 md:grid-cols-3">
         <Planned icon={<BookOpen size={20} />} title={t('k1')} text={t('k1_t')} />
         <Planned icon={<BookOpen size={20} />} title={t('k2')} text={t('k2_t')} />
         <Planned icon={<Sailboat size={20} />} title={t('k3')} text={t('k3_t')} />
+        </div>
       </div>
     </AppShell>
   );

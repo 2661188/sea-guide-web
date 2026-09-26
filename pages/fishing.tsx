@@ -106,8 +106,13 @@ function DayView({ data, day, now, hours, extremes, label, isToday }: {
           <p className="muted mt-1">{t('no_window_hint')}</p>
         </div>
       )}
-      {windows.map((w) => <WindowCard key={w.start} w={w} primary={w.score === topScore} now={now} />)}
+      {windows.length > 0 && (
+        <div className="grid gap-3 md:grid-cols-2">
+          {windows.map((w) => <WindowCard key={w.start} w={w} primary={w.score === topScore} now={now} />)}
+        </div>
+      )}
 
+      <div className="grid gap-3 lg:grid-cols-2">
       {/* Hourly outlook — time runs left to right in every language */}
       <section className="card p-4">
         <div className="flex items-center justify-between">
@@ -149,9 +154,10 @@ function DayView({ data, day, now, hours, extremes, label, isToday }: {
           ))}
         </ul>
       </section>
+      </div>
 
       {/* Day facts */}
-      <section className="grid grid-cols-2 gap-3">
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Fact label={t('sun')} tag="live">
           <p className="flex items-center gap-1.5 text-sm"><Sunrise size={15} className="text-buoy" /> <b className="tabular-nums">{data.daily.sunrise[d]?.slice(11, 16) ?? '—'}</b></p>
           <p className="mt-1 flex items-center gap-1.5 text-sm"><Sunset size={15} className="text-lagoon" /> <b className="tabular-nums">{data.daily.sunset[d]?.slice(11, 16) ?? '—'}</b></p>

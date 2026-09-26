@@ -16,7 +16,7 @@ export default function MapPage() {
           <p className="eyebrow">{t('forecast_point')}</p>
           <p className="mt-1 font-display text-2xl font-semibold">{spotName(spot, lang)} <span className="font-sans text-base font-normal text-slate-500">{lang === 'ar' ? spot.name : spot.ar}</span></p>
           <p className="muted text-sm tabular-nums">{spotArea(spot, lang)} · <bdi>{spot.lat.toFixed(4)}°N, {spot.lon.toFixed(4)}°E</bdi></p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-3 grid grid-cols-2 gap-2 md:max-w-md">
             <a className="tap flex h-11 items-center justify-center gap-2 rounded-xl bg-abyss text-sm font-semibold text-white" href={`https://maps.apple.com/?ll=${q}&q=${encodeURIComponent(spot.name)}`} target="_blank" rel="noreferrer">
               <Navigation size={15} /> {t('apple_maps')}
             </a>
@@ -27,10 +27,12 @@ export default function MapPage() {
         </section>
 
         <SectionTitle right={<SourceTag kind="info" />}>{t('map_coming')}</SectionTitle>
+        <div className="grid gap-3 md:grid-cols-2">
         <Planned icon={<Anchor size={20} />} title={t('m1')} text={t('m1_t')} />
         <Planned icon={<Fuel size={20} />} title={t('m2')} text={t('m2_t')} />
         <Planned icon={<Star size={20} />} title={t('m3')} text={t('m3_t')} />
         <Planned icon={<LifeBuoy size={20} />} title={t('m4')} text={t('m4_t')} />
+        </div>
       </div>
     </AppShell>
   );

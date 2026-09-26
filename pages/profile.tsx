@@ -16,7 +16,7 @@ export default function Profile() {
   };
   return (
     <AppShell title={t('profile')} showSpot={false}>
-      <div className="space-y-3 pb-20">
+      <div className="space-y-3 pb-20 lg:max-w-3xl">
         <SectionTitle>{t('settings')}</SectionTitle>
         <section className="card divide-y divide-slate-100 text-sm dark:divide-white/10">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -41,8 +41,10 @@ export default function Profile() {
         </section>
 
         <SectionTitle>{t('boats_places')}</SectionTitle>
-        <Planned icon={<Sailboat size={20} />} title={t('my_boats')} text={t('my_boats_t')} />
-        <Planned icon={<Star size={20} />} title={t('favourites')} text={t('favourites_t')} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <Planned icon={<Sailboat size={20} />} title={t('my_boats')} text={t('my_boats_t')} />
+          <Planned icon={<Star size={20} />} title={t('favourites')} text={t('favourites_t')} />
+        </div>
 
         <SectionTitle>{t('about_data')}</SectionTitle>
         <section className="card space-y-2 p-4 text-sm leading-relaxed">

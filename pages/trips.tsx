@@ -21,7 +21,7 @@ export default function Trips() {
 
   return (
     <AppShell title={t('nav_trips')} showSpot={false}>
-      <div className="space-y-3 pb-20">
+      <div className="grid gap-3 pb-20 lg:grid-cols-2 lg:items-start lg:gap-4">
         <section className="card overflow-hidden">
           <div className="flex items-center justify-between px-4 pt-4">
             <div>
@@ -52,9 +52,11 @@ export default function Trips() {
           </div>
         </section>
 
-        <SectionTitle right={<SourceTag kind="info" />}>{t('coming_next')}</SectionTitle>
-        <Planned icon={<Route size={20} />} title={t('plan_trip')} text={t('plan_trip_t')} />
-        <Planned icon={<NotebookPen size={20} />} title={t('journal')} text={t('journal_t')} />
+        <div className="space-y-3">
+          <SectionTitle right={<SourceTag kind="info" />}>{t('coming_next')}</SectionTitle>
+          <Planned icon={<Route size={20} />} title={t('plan_trip')} text={t('plan_trip_t')} />
+          <Planned icon={<NotebookPen size={20} />} title={t('journal')} text={t('journal_t')} />
+        </div>
       </div>
     </AppShell>
   );
