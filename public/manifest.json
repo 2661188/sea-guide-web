@@ -1,0 +1,19 @@
+{
+  "name": "Bahrna · بحرنا",
+  "short_name": "Bahrna",
+  "description": "Your smart companion at sea: wind, waves, tide, fishing times and GPS trip recording for UAE waters.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#06283D",
+  "theme_color": "#06283D",
+  "lang": "en",
+  "dir": "auto",
+  "categories": ["navigation", "weather", "sports"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
