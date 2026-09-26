@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Minus, Plus, Sunrise, Sunset, Waves, Wind } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
 import { TideChart } from '@/components/TideChart';
+import { FishingToday } from '@/components/FishingToday';
 import { MoonIcon } from '@/components/MoonIcon';
 import { WeatherIcon } from '@/components/WeatherIcon';
 import { ErrorState, LoadingScreen, OfflineBanner, SectionTitle, SourceTag, toneText } from '@/components/ui';
@@ -54,6 +55,10 @@ export default function Fishing() {
         {cond.offline && data && <OfflineBanner savedAt={data.fetchedAt} />}
         {cond.status === 'loading' && <LoadingScreen />}
         {cond.status === 'error' && <ErrorState errorKey={cond.error} onRetry={cond.refresh} />}
+
+        {data && base && view === 'today' && !pickedDay && (
+          <FishingToday data={data} hours={base.hours} windows={fishingWindows(data, base.hours, today, base.now, 2)} now={base.now} />
+        )}
 
         {data && base && (view !== 'week' || pickedDay) && (
           <>

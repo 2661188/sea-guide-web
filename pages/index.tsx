@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { ChevronRight, Droplets, Eye, ExternalLink, Fish, Navigation2, Phone, Sunrise, Sunset, Thermometer, Waves, Wind } from 'lucide-react';
+import { ChevronRight, ExternalLink, MapPin, Phone } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
 import { TideChart } from '@/components/TideChart';
 import { TideExplorer } from '@/components/TideExplorer';
-import { MoonIcon } from '@/components/MoonIcon';
-import { WeatherIcon } from '@/components/WeatherIcon';
+import { WindExplorer } from '@/components/WindExplorer';
+import { FishingToday } from '@/components/FishingToday';
+import { Compass, Daylight, Gauges, HourStrip, SportsDonut, Temps, TideTable, WeekOutlook } from '@/components/Dashboard';
 import { ActivityIcon } from '@/components/ActivityIcon';
 import { ErrorState, LoadingScreen, OfflineBanner, SectionTitle, SourceTag, toneDot, toneText, Val } from '@/components/ui';
 import { useSpot } from '@/lib/SpotContext';
@@ -52,6 +53,7 @@ export default function Home() {
       summary: seaSummary(data, i),
       acts: ACTIVITIES.map((a) => assessActivity(a, data, i)),
       window: fishingWindows(data, hours, today, now, 1)[0] ?? fishingWindows(data, hours, dayKey(now + 864e5), now, 1)[0],
+      windows: fishingWindows(data, hours, today, now, 2).length ? fishingWindows(data, hours, today, now, 2) : fishingWindows(data, hours, dayKey(now + 864e5), now, 2),
       wx: weatherInfo(h.weatherCode[i]),
       moon: moonAt(Date.now()),
       sunrise: data.daily.sunrise[d]?.slice(11, 16),
@@ -89,7 +91,7 @@ export default function Home() {
                 <div className="px-5 pt-5 md:px-6 md:pt-6">
                   <div className="flex items-center justify-between gap-2">
                     <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
-                      <ActivityIcon id={activity} size={15} /> {t('for_activity', { activity: t(`act_${activity}`) })}
+                      <ActivityIcon id={activity} size={15} /> {t('today_at_sea')} · {t(`act_${activity}`)}
                     </p>
                     <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/70">{t('src_calc')}</span>
                   </div>
@@ -101,18 +103,17 @@ export default function Home() {
 
                   <dl className="mt-4 grid grid-cols-4 gap-2">
                     {(([
-                      ['wind', v.summary.windMin != null ? `${Math.round(v.summary.windMin)}–${Math.round(v.summary.windMax!)}` : null, t('unit_kn')],
-                      activity === 'fishing'
-                        ? ['fishing', v.hours[v.i] ? t(fishingLabel(v.hours[v.i].score)) : null, '']
-                        : ['gusts_label', v.summary.gustMax != null ? `${Math.round(v.summary.gustMax)}` : null, t('unit_kn')],
-                      ['waves', v.summary.waveMax != null ? v.summary.waveMax.toFixed(1) : null, t('unit_m')],
-                      ['tide', v.summary.trend ? t(trendKey(v.summary.trend)) : null, ''],
-                    ]) as [Key, string | null, string][]).map(([label, value, unit]) => (
-                      <div key={label}>
-                        <dt className="text-[10px] font-semibold uppercase tracking-wider text-white/50">{t(label)}</dt>
-                        <dd className="mt-1 font-display text-[22px] font-semibold leading-none tabular-nums md:text-[26px]">
-                          <bdi>{value ?? '—'}</bdi><span className="ms-0.5 text-xs font-medium text-white/60">{value ? unit : ''}</span>
+                      ['wind', h.windSpeed[v.i] != null ? `${Math.round(h.windSpeed[v.i]!)}` : null, h.windDirection[v.i] != null ? dir(h.windDirection[v.i]) : t('unit_kn'), t('unit_kn')],
+                      ['waves', h.waveHeight[v.i] != null ? h.waveHeight[v.i]!.toFixed(1) : null, t('unit_m')],
+                      ['sea_temp', h.seaTemp[v.i] != null ? h.seaTemp[v.i]!.toFixed(0) : null, '°C'],
+                      ['visibility', h.visibility[v.i] != null ? (h.visibility[v.i]! >= 10000 ? '10+' : (h.visibility[v.i]! / 1000).toFixed(0)) : null, t('unit_km')],
+                    ]) as [Key, string | null, string, string?][]).map(([label, value, unit, suffix]) => (
+                      <div key={label} className="min-w-0">
+                        <dt className="truncate text-[10px] font-semibold uppercase tracking-wider text-white/50">{t(label)}</dt>
+                        <dd className="mt-1 font-display text-[26px] font-semibold leading-none tabular-nums md:text-[30px]">
+                          <bdi>{value ?? '—'}</bdi>{value && suffix && <span className="ms-0.5 font-sans text-xs font-medium text-white/60">{suffix}</span>}
                         </dd>
+                        <dd className="mt-0.5 truncate text-[11px] font-medium text-white/60">{value ? unit : t('no_data')}</dd>
                       </div>
                     ))}
                   </dl>
@@ -121,17 +122,44 @@ export default function Home() {
                   <TideChart data={data} from={v.now - 3 * 3600e3} to={v.now + 21 * 3600e3} extremes={v.extremes} nowMs={v.now} variant="dark" height={112} />
                 </div>
                 <div className="flex items-center justify-between gap-2 bg-black/20 px-5 py-2.5 text-[11px] text-white/60 md:px-6">
-                  <span>{t('hero_foot')}</span>
+                  <span><Fresh at={data.fetchedAt} /> · {t('hero_foot')}</span>
                   <a href={region.officialForecast.url} target="_blank" rel="noreferrer" className="flex shrink-0 items-center gap-1 font-semibold text-shallows">
                     {t('official_forecast')} <ExternalLink size={11} />
                   </a>
                 </div>
               </section>
 
-              {/* TIDE EXPLORER — drag through the whole week */}
+              {/* FISHING TODAY — answer first */}
               <div className="md:col-span-5">
-                <TideExplorer data={data} extremes={v.extremes} nowMs={v.now} />
+                <FishingToday data={data} hours={v.hours} windows={v.windows} now={v.now} compact />
               </div>
+            </div>
+
+            {/* WEEK EXPLORERS: tide + wind */}
+            <div className="grid gap-3 md:grid-cols-2 lg:gap-4">
+              <TideExplorer data={data} extremes={v.extremes} nowMs={v.now} />
+              <WindExplorer data={data} nowMs={v.now} />
+            </div>
+
+            {/* SPORTS DONUT + 24H STRIP */}
+            <div className="grid gap-3 md:grid-cols-12 lg:gap-4">
+              <div className="md:col-span-5"><SportsDonut acts={v.acts} activity={activity} onPick={setActivity} /></div>
+              <div className="md:col-span-7"><HourStrip data={data} activity={activity} i={v.i} /></div>
+            </div>
+
+            {/* GAUGES */}
+            <SectionTitle right={<SourceTag kind="live" />}>{t('gauges')}</SectionTitle>
+            <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 lg:gap-4">
+              <Gauges data={data} i={v.i} />
+              <Compass data={data} i={v.i} />
+              <Daylight data={data} nowMs={v.now} />
+              <Temps data={data} i={v.i} />
+            </section>
+
+            {/* TABLES */}
+            <div className="grid gap-3 md:grid-cols-12 lg:gap-4">
+              <div className="md:col-span-5"><TideTable extremes={v.extremes} nowMs={v.now} /></div>
+              <div className="md:col-span-7"><WeekOutlook data={data} activity={activity} /></div>
             </div>
 
             {/* ALL ACTIVITIES AT A GLANCE */}
@@ -150,72 +178,10 @@ export default function Home() {
               ))}
             </section>
 
-            {/* CONDITIONS GRID */}
-            <SectionTitle right={<SourceTag kind="live" />}>{t('right_now')}</SectionTitle>
-            <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <Tile icon={<Wind size={16} />} label={t('wind')}>
-                <Val v={h.windSpeed[v.i]}>
-                  <p className="readout text-[34px]">{Math.round(h.windSpeed[v.i]!)}<Unit>{t('unit_kn')}</Unit></p>
-                  <p className="muted mt-1 flex items-center gap-1 text-xs">
-                    <Navigation2 size={13} className="shrink-0 text-lagoon" style={{ transform: `rotate(${(h.windDirection[v.i] ?? 0) + 180}deg)` }} aria-hidden="true" />
-                    {t('from_dir', { d: dir(h.windDirection[v.i]) })} · {t('gusts', { v: h.windGusts[v.i] != null ? Math.round(h.windGusts[v.i]!) : '—' })}
-                  </p>
-                </Val>
-              </Tile>
-              <Tile icon={<Waves size={16} />} label={t('waves')}>
-                <Val v={h.waveHeight[v.i]}>
-                  <p className="readout text-[34px]">{h.waveHeight[v.i]!.toFixed(1)}<Unit>{t('unit_m')}</Unit></p>
-                  <p className="muted mt-1 text-xs">{h.wavePeriod[v.i] != null ? t('period', { v: h.wavePeriod[v.i]!.toFixed(0) }) : t('period_na')} · {t('wave_from', { d: dir(h.waveDirection[v.i]) })}</p>
-                </Val>
-              </Tile>
-              <Tile icon={<WeatherIcon kind={v.wx?.kind} size={16} />} label={t('weather')}>
-                <Val v={h.airTemp[v.i]}>
-                  <p className="readout text-[34px]">{Math.round(h.airTemp[v.i]!)}<Unit>°C</Unit></p>
-                  <p className="muted mt-1 text-xs">{v.wx ? t(v.wx.key) : '—'}{h.precipProb[v.i] ? ` · ${t('rain_pct', { v: h.precipProb[v.i]! })}` : ''}</p>
-                </Val>
-              </Tile>
-              <Tile icon={<Thermometer size={16} />} label={t('sea_temp')}>
-                <Val v={h.seaTemp[v.i]}>
-                  <p className="readout text-[34px]">{h.seaTemp[v.i]!.toFixed(1)}<Unit>°C</Unit></p>
-                  <p className="muted mt-1 text-xs">{t('surface')}</p>
-                </Val>
-              </Tile>
-              <Tile icon={<Droplets size={16} />} label={t('humidity')}>
-                <Val v={h.humidity[v.i]}><p className="readout text-[34px]">{Math.round(h.humidity[v.i]!)}<Unit>%</Unit></p></Val>
-              </Tile>
-              <Tile icon={<Eye size={16} />} label={t('visibility')}>
-                <Val v={h.visibility[v.i]}>
-                  <p className="readout text-[34px]"><bdi>{h.visibility[v.i]! >= 10000 ? '10+' : (h.visibility[v.i]! / 1000).toFixed(1)}</bdi><Unit>{t('unit_km')}</Unit></p>
-                </Val>
-              </Tile>
-              <Tile icon={<Sunrise size={16} />} label={t('sun')}>
-                <p className="readout text-[28px]">{v.sunrise ?? '—'}</p>
-                <p className="muted mt-1 flex items-center gap-1 text-xs"><Sunset size={13} /> {t('sunset_at', { v: v.sunset ?? '—' })}</p>
-              </Tile>
-              <Tile icon={null} label={t('moon')} tag="calc">
-                <div className="flex items-center gap-3">
-                  <MoonIcon fraction={v.moon.fraction} size={40} />
-                  <div>
-                    <p className="text-sm font-semibold leading-tight">{t(v.moon.name)}</p>
-                    <p className="muted text-xs">{t('lit', { v: Math.round(v.moon.illumination * 100) })}</p>
-                  </div>
-                </div>
-              </Tile>
-            </section>
-
             <div className="grid gap-3 md:grid-cols-2">
-              {/* FISHING TEASER */}
-              <Link href="/fishing" className="card tap flex items-center gap-4 p-4">
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-lagoon/10 text-lagoon dark:text-shallows"><Fish size={24} /></span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2"><span className="eyebrow">{t('best_window')}</span><SourceTag kind="calc" /></span>
-                  {v.window ? (
-                    <span className="mt-1 block">
-                      <span className="readout block text-[28px]">{fmtTime(v.window.start)}–{fmtTime(v.window.end)}</span>
-                      <span className={`mt-0.5 block text-sm ${toneText[v.window.tone]}`}>{t(dayKey(v.window.start) === dayKey(v.now) ? 'today' : 'tomorrow')} · {t(v.window.label)}</span>
-                    </span>
-                  ) : <span className="muted block text-sm">{t('no_window')}</span>}
-                </span>
+              <Link href="/map" className="card tap flex items-center gap-4 p-4">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-lagoon/10 text-lagoon dark:text-shallows"><MapPin size={24} /></span>
+                <span className="min-w-0 flex-1"><span className="block font-semibold">{t('stations_link')}</span><span className="muted block text-sm">{t('stations_t')}</span></span>
                 <ChevronRight className="shrink-0 text-slate-400 rtl:rotate-180" />
               </Link>
 
@@ -237,18 +203,10 @@ export default function Home() {
   );
 }
 
-function Unit({ children }: { children: React.ReactNode }) {
-  return <span className="ms-1 font-sans text-sm font-medium text-slate-400">{children}</span>;
-}
 
-function Tile({ icon, label, children, tag }: { icon: React.ReactNode; label: string; children: React.ReactNode; tag?: 'calc' }) {
-  return (
-    <div className="card p-4">
-      <div className="flex items-center justify-between">
-        <p className="eyebrow flex items-center gap-1.5">{icon}{label}</p>
-        {tag && <SourceTag kind={tag} />}
-      </div>
-      <div className="mt-2.5">{children}</div>
-    </div>
-  );
+/** "Updated 12 min ago" so people can judge how fresh the forecast is. */
+function Fresh({ at }: { at: string }) {
+  const { t } = useT();
+  const m = Math.max(0, Math.round((Date.now() - new Date(at).getTime()) / 60000));
+  return <>{m < 2 ? t('updated_now') : m < 90 ? t('updated_ago', { m }) : t('updated_h', { h: Math.round(m / 60) })}</>;
 }
