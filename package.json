@@ -1,6 +1,6 @@
 {
   "name": "bahrna-app",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Bahrna (بحرنا) - marine companion for UAE waters: tides, wind, waves, weather and fishing windows, in English and Arabic",
   "private": true,
   "scripts": {
