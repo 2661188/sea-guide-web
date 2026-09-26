@@ -6,14 +6,15 @@ import { useConditions } from '@/lib/useConditions';
 import { useT } from '@/lib/i18n/LangContext';
 import { contactLabel, spotName } from '@/lib/i18n/place';
 import { findExtremes, hourIndex, tideTrend, trendKey } from '@/lib/marine/tides';
-import { fishingHours, fishingWindows, seaSummary } from '@/lib/marine/assess';
+import { fishingHours, fishingWindows } from '@/lib/marine/assess';
+import { assessActivity, ratingLevelKey } from '@/lib/marine/activities';
 import { nowLocalMs, dayKey, fmtTime, untilMsg } from '@/lib/marine/time';
 import { SourceTag } from './ui';
 
 // Phase 1: answers built only from live app data (no AI model yet, no invented facts).
 // Phase 6 adds a real AI chat behind /api/captain once an API key is configured.
 export function CaptainSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { spot, region } = useSpot();
+  const { spot, region, activity } = useSpot();
   const { data } = useConditions(spot.id);
   const { t, tm, lang } = useT();
 
@@ -30,7 +31,7 @@ export function CaptainSheet({ open, onClose }: { open: boolean; onClose: () => 
     const i = hourIndex(data.hourly.time, now);
     const next = findExtremes(data.hourly.time, data.hourly.seaLevel).filter((e) => e.at > now).slice(0, 2);
     const trend = tideTrend(data.hourly.seaLevel, i);
-    const s = seaSummary(data, i);
+    const act = assessActivity(activity, data, i);
     const win = fishingWindows(data, fishingHours(data), dayKey(now), now, 1)[0];
     const sep = lang === 'ar' ? '، ' : ', ';
     return {
@@ -42,7 +43,7 @@ export function CaptainSheet({ open, onClose }: { open: boolean; onClose: () => 
           })).join(lang === 'ar' ? '؛ ' : '; '),
         })
         : t('a_tide_na'),
-      sea: `${t(s.level)}. ${s.reasons.map(tm).join('. ')}.`,
+      sea: `${t(ratingLevelKey[act.rating])}. ${act.reasons.map(tm).join('. ')}.`,
       fish: win
         ? t('a_fish', {
           from: fmtTime(win.start), to: fmtTime(win.end), label: t(win.label),
@@ -50,15 +51,15 @@ export function CaptainSheet({ open, onClose }: { open: boolean; onClose: () => 
         })
         : t('a_fish_none'),
     };
-  }, [data, t, tm, lang]);
+  }, [data, t, tm, lang, activity]);
 
   if (!open) return null;
   const coastGuard = region.emergency.find((e) => /coast/i.test(e.label));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true" aria-label={t('captain')}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center md:p-6" role="dialog" aria-modal="true" aria-label={t('captain')}>
       <button className="absolute inset-0 bg-abyss/50 backdrop-blur-[2px]" aria-label={t('close')} onClick={onClose} />
-      <div className="animate-rise relative max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-white pb-safe shadow-2xl dark:bg-[#0A2B40]">
+      <div className="animate-rise relative max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-t-3xl md:max-w-lg md:rounded-3xl bg-white pb-safe shadow-2xl dark:bg-[#0A2B40]">
         <div className="sticky top-0 flex items-center justify-between bg-inherit px-5 pb-2 pt-4">
           <div className="flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-full bg-abyss text-shallows"><ShipWheel size={20} /></span>
@@ -79,7 +80,7 @@ export function CaptainSheet({ open, onClose }: { open: boolean; onClose: () => 
           ] as const).map(([q, a, kind]) => (
             <div key={q} className="rounded-2xl bg-salt p-4 dark:bg-white/5">
               <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-semibold">{t(q)}</p>
+                <p className="text-sm font-semibold">{t(q, { activity: t(`act_${activity}` as const) })}</p>
                 <SourceTag kind={kind} className="shrink-0" />
               </div>
               <p className="mt-1.5 text-[15px] leading-snug">{a}</p>

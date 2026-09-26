@@ -16,7 +16,7 @@ interface Props {
 }
 
 /** Smooth path through points (Catmull-Rom → cubic Bézier). */
-function smooth(pts: [number, number][]) {
+export function smooth(pts: [number, number][]) {
   if (pts.length < 2) return '';
   let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
   for (let i = 0; i < pts.length - 1; i++) {

@@ -16,9 +16,9 @@ export function SpotSheet({ open, onClose }: { open: boolean; onClose: () => voi
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true" aria-label={t('where_heading')}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center md:p-6" role="dialog" aria-modal="true" aria-label={t('where_heading')}>
       <button className="absolute inset-0 bg-abyss/50 backdrop-blur-[2px]" aria-label={t('close')} onClick={onClose} />
-      <div className="animate-rise relative max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-white pb-safe shadow-2xl dark:bg-[#0A2B40]">
+      <div className="animate-rise relative max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-t-3xl md:max-w-lg md:rounded-3xl bg-white pb-safe shadow-2xl dark:bg-[#0A2B40]">
         <div className="flex items-center justify-between px-5 pt-4">
           <h2 className="font-display text-2xl font-semibold">{t('where_heading')}</h2>
           <button onClick={onClose} className="rounded-full p-2 hover:bg-slate-100 dark:hover:bg-white/10" aria-label={t('close')}><X size={20} /></button>
