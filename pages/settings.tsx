@@ -10,8 +10,9 @@ import { ACTIVITIES } from '@/lib/marine/activities';
 import { EMIRATES, REGIONS, DEFAULT_REGION, findSpot } from '@/lib/regions';
 import { spotName, contactLabel, forecastName } from '@/lib/i18n/place';
 import { getTheme, setTheme, ThemePref } from '@/lib/theme';
+import { BoatSettings, TileCacheRow } from '@/components/nav/BoatSettings';
 
-const VERSION = '0.5';
+const VERSION = '0.6';
 const INSTAGRAM = 'rakoverlander';
 
 interface SavedRow { id: string; bytes: number; at: string | null }
@@ -110,6 +111,10 @@ export default function SettingsPage() {
             </Row>
             <Row label={t('units')}><span className="muted text-end">{t('units_v')}</span></Row>
           </section>
+
+          {/* MY BOAT */}
+          <SectionTitle>{t('my_boat')}</SectionTitle>
+          <BoatSettings />
         </div>
 
         <div className="space-y-3">
@@ -145,6 +150,7 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="muted mt-2 text-xs">{t('clear_all_t')}</p>
+            <div className="mt-3"><TileCacheRow /></div>
           </section>
 
           {/* ABOUT */}

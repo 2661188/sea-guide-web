@@ -85,7 +85,7 @@ export default function StationsMap() {
                         <circle r={on ? 8.5 : 6.5} fill={c} stroke="#fff" strokeWidth="2.2" />
                         {st?.trend && st.trend !== 'Slack' && <path d={st.trend === 'Rising' ? 'M0 -3.2 L2.8 1.6 H-2.8 Z' : 'M0 3.2 L2.8 -1.6 H-2.8 Z'} fill="#fff" />}
                         {(labelsOn || on) && (
-                          <text x="12" y="4" className="fill-ink text-[12px] font-bold dark:fill-white" style={{ paintOrder: 'stroke', stroke: 'rgba(255,255,255,.85)', strokeWidth: 3 }}>{spotName(s, lang)}</text>
+                          <text x="12" y="4" className="map-label fill-ink text-[12px] font-bold dark:fill-white">{spotName(s, lang)}</text>
                         )}
                       </g>
                     );
