@@ -36,6 +36,7 @@ export function mockConditions(spotId: string, mode: string): Conditions {
       visibility: h((i) => (i > 50 && i < 58 ? 1800 : 18000)),
       weatherCode: time.map((_, i) => (i > 110 && i < 116 ? 95 : i % 30 < 6 ? 2 : 0)),
       precipProb: h((i) => (i > 108 && i < 118 ? 60 : 0)),
+      uv: h((i) => Math.max(0, 11 * Math.sin((((i % 24) - 6) / 12.2) * Math.PI))),
     },
     daily: {
       date,
@@ -43,4 +44,23 @@ export function mockConditions(spotId: string, mode: string): Conditions {
       sunset: date.map((d) => `${d}T18:13`),
     },
   };
+}
+
+/** Mock sea levels for the stations map: same tide, shifted by position. */
+export function mockSeaLevels(points: { lat: number; lon: number }[]) {
+  const offset = 4 * 3600;
+  const start = new Date(Date.now() + offset * 1000);
+  start.setUTCHours(0, 0, 0, 0);
+  const time: string[] = [];
+  for (let i = 0; i < 72; i++) time.push(new Date(start.getTime() + i * 3600e3).toISOString().slice(0, 16));
+  return points.map((p) => {
+    const east = p.lon > 56.2; // Gulf of Oman: smaller range, earlier tide
+    const shift = east ? -3 : (56 - p.lon) * 1.5;
+    const amp = east ? 0.7 : 0.45 + (56 - p.lon) * 0.12;
+    return {
+      utcOffsetSeconds: offset,
+      time,
+      level: time.map((_, i) => Math.round((amp * Math.cos(((i - 11 - shift) / 12.42) * 2 * Math.PI) + 0.15 * Math.cos(((i - 4) / 24.8) * 2 * Math.PI)) * 100) / 100),
+    };
+  });
 }

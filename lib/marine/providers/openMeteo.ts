@@ -10,7 +10,7 @@ const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const DAYS = 7;
 
 async function getJson(url: string) {
-  const res = await fetch(url, { headers: { 'User-Agent': 'Bahrna/0.3 (marine companion)' } });
+  const res = await fetch(url, { headers: { 'User-Agent': 'Bahrna/0.5 (marine companion)' } });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || data.error) throw new Error(data.reason || `Provider returned ${res.status}`);
   return data;
@@ -31,7 +31,7 @@ export async function fetchOpenMeteo(spotId: string, lat: number, lon: number, t
     `&hourly=sea_level_height_msl,wave_height,wave_direction,wave_period,sea_surface_temperature`;
   const forecastUrl =
     `${FORECAST}?latitude=${lat}&longitude=${lon}&timezone=${tz}&forecast_days=${DAYS}&wind_speed_unit=kn` +
-    `&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m,relative_humidity_2m,visibility,weather_code,precipitation_probability` +
+    `&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m,relative_humidity_2m,visibility,weather_code,precipitation_probability,uv_index` +
     `&daily=sunrise,sunset`;
 
   const [m, f] = await Promise.all([getJson(marineUrl), getJson(forecastUrl)]);
@@ -64,6 +64,7 @@ export async function fetchOpenMeteo(spotId: string, lat: number, lon: number, t
       visibility: align(time, ft, f.hourly?.visibility),
       weatherCode: align(time, ft, f.hourly?.weather_code),
       precipProb: align(time, ft, f.hourly?.precipitation_probability),
+      uv: align(time, ft, f.hourly?.uv_index),
     },
     daily: {
       date: f.daily?.time ?? [],
@@ -71,4 +72,17 @@ export async function fetchOpenMeteo(spotId: string, lat: number, lon: number, t
       sunset: f.daily?.sunset ?? [],
     },
   };
+}
+
+/** Sea level for many points in one request (tide stations map). */
+export async function fetchSeaLevels(points: { lat: number; lon: number }[], timezone: string) {
+  const lat = points.map((p) => p.lat).join(','), lon = points.map((p) => p.lon).join(',');
+  const url = `${MARINE}?latitude=${lat}&longitude=${lon}&timezone=${encodeURIComponent(timezone)}&forecast_days=3&hourly=sea_level_height_msl`;
+  const data = await getJson(url);
+  const list = Array.isArray(data) ? data : [data];
+  return list.map((d: { utc_offset_seconds?: number; hourly?: { time?: string[]; sea_level_height_msl?: Num[] } }) => ({
+    utcOffsetSeconds: d.utc_offset_seconds ?? 0,
+    time: d.hourly?.time ?? [],
+    level: d.hourly?.sea_level_height_msl ?? [],
+  }));
 }
