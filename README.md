@@ -4,14 +4,15 @@ A marine companion for UAE waters, in English and Arabic: tides, wind, waves, we
 
 Live: https://bahrna.vercel.app
 
-## What's in the app (v0.3)
-- **Home — Today on the water.** A sea-state summary for the next 6 hours (Favourable / Moderate / Challenging / Rough, with reasons), the tide curve with a "now" marker, next high and low tide, wind and gusts, waves and period, weather, air and sea temperature, humidity, visibility, sunrise/sunset and moon phase.
-- **Fishing.** Hour-by-hour estimate, best windows (up to 3 h) with the factors behind them, and Today / Tomorrow / 7 days views.
-- **Trips.** Pre-departure checklist saved on the phone and usable offline.
-- **Learn.** UAE emergency numbers (Coast Guard 996) and the official forecast link.
-- **Captain.** Quick answers built only from live app data (a full AI chat is planned).
-- **Arabic and English.** Full right-to-left layout; switch with the ع / EN button or in Profile.
-- Every figure is labelled **Forecast** (live data), **Estimate** (calculated by Bahrna) or **Guide** (general information).
+## What's in the app (v0.5)
+- **Home: Today at sea.** Conditions for your chosen water sport (8 sports), wind, waves, sea temperature and visibility, today's tide, fishing score with best windows, week-long tide and wind explorers (drag the dotted line), sports donut, 24-hour strip, gauges (wind, waves, UV), compass, daylight and moon, tide table and 7-day outlook.
+- **Navigate.** Live GPS position, speed, course, coordinates. Start a trip to record your track on the phone (IndexedDB, works without mobile data). Return to start follows your recorded track back. SOS sheet with big coordinates, copy/share, call Coast Guard 996, save point. Offline base map from Natural Earth (not a nautical chart).
+- **Trips.** Saved trips with track map and stats, saved points, and trip readiness checklists for every sport (add, delete, restore).
+- **Fishing.** Score and best windows with factor bars, hour-by-hour, Today / Tomorrow / 7 days.
+- **Learn.** 10 knots and 9 boating skills with sketches and step-by-step cards (EN/AR), emergency numbers.
+- **Tide stations map.** 17 model tide points on both coasts, one batched provider call (/api/stations).
+- **Settings.** Language, light/dark/auto, main activity, home spot, offline data, about, follow @rakoverlander.
+- First-launch onboarding, PWA manifest and icons, Arabic RTL throughout.
 
 ## Data
 - Open-Meteo Marine API: sea level (tide), wave height, direction and period, sea surface temperature.
