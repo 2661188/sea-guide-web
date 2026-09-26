@@ -38,3 +38,7 @@
 .tide-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(255,107,53,.5); }
 
 @keyframes ring { from { stroke-dasharray: 0 999; } }
+
+/* Chart labels: light halo on light maps, dark halo in dark mode */
+.map-label { paint-order: stroke; stroke: rgba(255,255,255,.9); stroke-width: 3px; stroke-linejoin: round; }
+.dark .map-label { stroke: rgba(6,40,61,.92); }
