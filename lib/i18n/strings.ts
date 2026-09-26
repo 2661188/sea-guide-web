@@ -134,7 +134,7 @@ const en = {
 
   captain_sub: 'Quick answers for {spot}',
   waiting: 'Waiting for sea data…',
-  q_tide: 'What is the tide doing?', q_sea: 'How does the sea look for the next 6 hours?',
+  q_tide: 'What is the tide doing?', q_sea: 'How does it look for {activity} in the next 6 hours?',
   q_fish: 'When is the best fishing window today?', q_check: 'What should I check before leaving the marina?',
   checklist_link: '→ Pre-departure checklist',
   ask_title: 'Ask the Captain anything',
@@ -142,6 +142,18 @@ const en = {
   emergency_call: 'Emergency at sea? Call {label}',
   a_tide: '{trend} now. {events}.', a_event: '{type} at {time} ({h} m, {until})', a_tide_na: 'Tide data is unavailable right now.',
   a_fish: '{from}–{to} today ({label}). Based on {factors}.', a_fish_none: 'No strong window left today. Check Fishing for tomorrow.',
+  act_boating: 'Boating', act_fishing: 'Fishing', act_jetski: 'Jet ski', act_kayak: 'Kayak & SUP',
+  act_sailing: 'Sailing', act_kite: 'Kite & windsurf', act_diving: 'Diving & snorkel', act_swimming: 'Swimming',
+  rate_good: 'Good', rate_fair: 'Fair', rate_poor: 'Poor', rate_unknown: 'No data',
+  lvl_good: 'Good conditions', lvl_fair: 'Fair conditions', lvl_poor: 'Poor conditions',
+  r_flow: 'Strong tidal current', r_wind_light: 'Light wind ({v} kn)', r_gusty: 'Gusty: {lo}–{hi} kn',
+  r_fish_score: 'Fishing estimate {v}/100', r_good_wind: 'Good wind: {v} kn',
+  your_activity: 'Your activity', activities: 'All activities · next 6 h', for_activity: '{activity} · next 6 h',
+  gusts_label: 'Gusts', choose_activity: 'Choose your activity',
+  tide_week: 'Tide explorer · 7 days', drag_hint: 'Drag the line or the slider to check the tide at any time this week.',
+  now_btn: 'Now', tide_at: 'Tide at this time', next_turn: 'Next: {type} {time}',
+  slider_label: 'Time to check the tide',
+  tagline: 'Tides, weather & watersports',
 };
 
 export type Key = keyof typeof en;
@@ -273,7 +285,7 @@ const ar: Record<Key, string> = {
 
   captain_sub: 'إجابات سريعة عن {spot}',
   waiting: 'بانتظار بيانات البحر…',
-  q_tide: 'ما وضع المد والجزر الآن؟', q_sea: 'كيف يبدو البحر في الساعات الست القادمة؟',
+  q_tide: 'ما وضع المد والجزر الآن؟', q_sea: 'كيف تبدو الظروف لـ{activity} في الساعات الست القادمة؟',
   q_fish: 'متى أفضل وقت للصيد اليوم؟', q_check: 'ماذا أتحقق منه قبل مغادرة المرسى؟',
   checklist_link: '← قائمة التحقق قبل الإبحار',
   ask_title: 'اسأل القبطان أي سؤال',
@@ -281,6 +293,18 @@ const ar: Record<Key, string> = {
   emergency_call: 'طوارئ في البحر؟ اتصل بـ{label}',
   a_tide: '{trend} الآن. {events}.', a_event: '{type} الساعة {time} ({h} م، {until})', a_tide_na: 'بيانات المد والجزر غير متوفرة حالياً.',
   a_fish: '{from}–{to} اليوم ({label}). بناءً على: {factors}.', a_fish_none: 'لا توجد فترة قوية متبقية اليوم. راجع صفحة الصيد لغدٍ.',
+  act_boating: 'القوارب', act_fishing: 'الصيد', act_jetski: 'الدراجة المائية', act_kayak: 'الكاياك والتجديف',
+  act_sailing: 'الإبحار الشراعي', act_kite: 'الكايت والشراع', act_diving: 'الغوص والسنوركل', act_swimming: 'السباحة',
+  rate_good: 'جيد', rate_fair: 'مقبول', rate_poor: 'غير مناسب', rate_unknown: 'لا بيانات',
+  lvl_good: 'ظروف جيدة', lvl_fair: 'ظروف مقبولة', lvl_poor: 'ظروف غير مناسبة',
+  r_flow: 'تيار مدّ وجزر قوي', r_wind_light: 'رياح خفيفة ({v} عقدة)', r_gusty: 'هبّات متقلبة: {lo}–{hi} عقدة',
+  r_fish_score: 'تقدير الصيد {v}/100', r_good_wind: 'رياح مناسبة: {v} عقدة',
+  your_activity: 'نشاطك', activities: 'كل الأنشطة · الساعات الست القادمة', for_activity: '{activity} · الساعات الست القادمة',
+  gusts_label: 'الهبّات', choose_activity: 'اختر نشاطك',
+  tide_week: 'مستكشف المد والجزر · 7 أيام', drag_hint: 'اسحب الخط أو المؤشر لمعرفة المد والجزر في أي وقت هذا الأسبوع.',
+  now_btn: 'الآن', tide_at: 'المد والجزر في هذا الوقت', next_turn: 'التالي: {type} {time}',
+  slider_label: 'الوقت المطلوب للمد والجزر',
+  tagline: 'المد والجزر والطقس والرياضات البحرية',
 };
 
 export const DICT: Record<Lang, Record<Key, string>> = { en, ar };
