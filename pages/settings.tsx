@@ -11,9 +11,10 @@ import { EMIRATES, REGIONS, DEFAULT_REGION, findSpot } from '@/lib/regions';
 import { spotName, contactLabel, forecastName } from '@/lib/i18n/place';
 import { getTheme, setTheme, ThemePref } from '@/lib/theme';
 import { BoatSettings, TileCacheRow } from '@/components/nav/BoatSettings';
+import { getInstagram, instagramUrl, setInstagram, DEFAULT_INSTAGRAM } from '@/lib/social/instagram';
+import { getAi, setAi, AiSettings, DEFAULT_AI } from '@/lib/ai/captain';
 
-const VERSION = '0.7';
-const INSTAGRAM = 'rakoverlander';
+const VERSION = '0.8';
 
 interface SavedRow { id: string; bytes: number; at: string | null }
 
@@ -57,23 +58,7 @@ export default function SettingsPage() {
         <div className="space-y-3">
           {/* FOLLOW ME */}
           <SectionTitle>{t('follow_me')}</SectionTitle>
-          <a href={`https://www.instagram.com/${INSTAGRAM}/`} target="_blank" rel="noreferrer"
-            className="tap relative block overflow-hidden rounded-3xl bg-gradient-to-br from-[#833AB4] via-[#E1306C] to-[#F77737] p-5 text-white shadow-lg">
-            <svg viewBox="0 0 200 60" className="pointer-events-none absolute -bottom-2 end-0 w-2/3 opacity-20" aria-hidden="true">
-              <path d="M0 40c20 0 20-10 40-10s20 10 40 10 20-10 40-10 20 10 40 10 20-10 40-10" stroke="#fff" strokeWidth="4" fill="none" />
-              <path d="M0 55c20 0 20-10 40-10s20 10 40 10 20-10 40-10 20 10 40 10 20-10 40-10" stroke="#fff" strokeWidth="4" fill="none" />
-            </svg>
-            <span className="flex items-center gap-3">
-              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/20 ring-1 ring-white/30"><Instagram size={28} /></span>
-              <span className="min-w-0">
-                <span className="block font-display text-[26px] font-semibold leading-none" dir="ltr">@{INSTAGRAM}</span>
-                <span className="mt-1 block text-sm text-white/85">{t('follow_t')}</span>
-              </span>
-            </span>
-            <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#C13584]">
-              {t('follow_btn')} <ExternalLink size={14} />
-            </span>
-          </a>
+          <InstagramCard />
 
           {/* PREFERENCES */}
           <SectionTitle>{t('preferences')}</SectionTitle>
@@ -111,6 +96,10 @@ export default function SettingsPage() {
             </Row>
             <Row label={t('units')}><span className="muted text-end">{t('units_v')}</span></Row>
           </section>
+
+          {/* VOICE ASSISTANT */}
+          <SectionTitle>{t('ai_title')}</SectionTitle>
+          <AiSettingsCard />
 
           {/* MY BOAT */}
           <SectionTitle>{t('my_boat')}</SectionTitle>
@@ -197,5 +186,75 @@ function Segmented({ value, onChange, options }: { value: string; onChange: (v: 
         </button>
       ))}
     </div>
+  );
+}
+
+function InstagramCard() {
+  const { t } = useT();
+  const [handle, setHandle] = useState(DEFAULT_INSTAGRAM);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => setHandle(getInstagram()), []);
+  const saveIt = (e: React.FormEvent) => {
+    e.preventDefault();
+    const r = setInstagram(draft);
+    if (!r.ok) { setMsg({ ok: false, text: t(r.error === 'empty' ? 'ig_empty' : 'ig_invalid') }); return; }
+    setHandle(r.handle); setEditing(false); setMsg({ ok: true, text: t('ig_saved', { h: r.handle }) });
+    setTimeout(() => setMsg(null), 3500);
+  };
+  return (
+    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#833AB4] via-[#E1306C] to-[#F77737] p-5 text-white shadow-lg">
+      <svg viewBox="0 0 200 60" className="pointer-events-none absolute -bottom-2 end-0 w-2/3 opacity-20" aria-hidden="true">
+        <path d="M0 40c20 0 20-10 40-10s20 10 40 10 20-10 40-10 20 10 40 10 20-10 40-10" stroke="#fff" strokeWidth="4" fill="none" />
+      </svg>
+      <span className="flex items-center gap-3">
+        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/20 ring-1 ring-white/30"><Instagram size={28} /></span>
+        <span className="min-w-0">
+          <span className="block truncate font-display text-[26px] font-semibold leading-none" dir="ltr">@{handle}</span>
+          <span className="mt-1 block text-sm text-white/85">{t('follow_t')}</span>
+        </span>
+      </span>
+      {editing ? (
+        <form onSubmit={saveIt} className="relative mt-4 flex gap-2">
+          <label className="sr-only" htmlFor="ig">{t('ig_label')}</label>
+          <input id="ig" value={draft} onChange={(e) => { setDraft(e.target.value); setMsg(null); }} autoFocus dir="ltr" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            placeholder="@rak_overlander" className="h-11 min-w-0 flex-1 rounded-xl border-0 bg-white/95 px-3 text-base text-ink" />
+          <button type="submit" className="tap h-11 rounded-xl bg-white px-4 text-sm font-bold text-[#C13584]">{t('save')}</button>
+          <button type="button" onClick={() => { setEditing(false); setMsg(null); }} className="tap h-11 rounded-xl bg-white/20 px-3 text-sm font-semibold">{t('cancel')}</button>
+        </form>
+      ) : (
+        <span className="relative mt-4 flex flex-wrap gap-2">
+          <a href={instagramUrl(handle)} target="_blank" rel="noreferrer" className="tap inline-flex h-10 items-center gap-1.5 rounded-full bg-white px-4 text-sm font-semibold text-[#C13584]">
+            {t('follow_btn')} <ExternalLink size={14} />
+          </a>
+          <button onClick={() => { setDraft(`@${handle}`); setEditing(true); setMsg(null); }} className="tap inline-flex h-10 items-center rounded-full bg-white/20 px-4 text-sm font-semibold ring-1 ring-white/40">{t('ig_edit')}</button>
+        </span>
+      )}
+      {msg && <p role="status" className={`relative mt-2 rounded-lg px-3 py-1.5 text-sm font-semibold ${msg.ok ? 'bg-white/90 text-good' : 'bg-white/90 text-bad'}`}>{msg.text}</p>}
+    </div>
+  );
+}
+
+function AiSettingsCard() {
+  const { t } = useT();
+  const [ai, setAiState] = useState<AiSettings>(DEFAULT_AI);
+  useEffect(() => setAiState(getAi()), []);
+  const upd = (p: Partial<AiSettings>) => { setAi(p); setAiState(getAi()); };
+  return (
+    <section className="card divide-y divide-slate-100 text-sm dark:divide-white/10">
+      <Row label={t('ai_lang')}>
+        <Segmented value={ai.lang} onChange={(v) => upd({ lang: v as AiSettings['lang'] })} options={[
+          { id: 'auto', label: t('ai_lang_auto') }, { id: 'en', label: 'English' }, { id: 'ar', label: 'العربية' },
+        ]} />
+      </Row>
+      <Row label={t('ai_voice_replies')}>
+        <button role="switch" aria-checked={ai.voice} aria-label={t('ai_voice_replies')} onClick={() => upd({ voice: !ai.voice })}
+          className={`relative h-8 w-14 shrink-0 rounded-full transition-colors ${ai.voice ? 'bg-good' : 'bg-slate-300 dark:bg-white/20'}`}>
+          <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${ai.voice ? 'start-7' : 'start-1'}`} />
+        </button>
+      </Row>
+      <p className="muted px-4 py-3 text-xs leading-relaxed">{t('ai_privacy')}</p>
+    </section>
   );
 }

@@ -11,6 +11,7 @@ import { WaypointSheet } from '@/components/nav/WaypointSheet';
 import { kindOf } from '@/components/nav/kinds';
 import { TripStats, tripStats } from '@/components/TripSummary';
 import { SectionTitle, Skeleton } from '@/components/ui';
+import { PlannedTrips } from '@/components/nav/PlannedTrips';
 import { useT } from '@/lib/i18n/LangContext';
 import {
   allRoutes, allTrips, allWaypoints, deleteTrip, getRoute, getTrip, newId, notifyNavData, onNavData, putRoute, Route, RoutePoint, tripPoints, Trip, TrackPoint, Waypoint,
@@ -69,6 +70,7 @@ function TripsHome() {
 
       <div className="grid gap-3 lg:grid-cols-2 lg:items-start lg:gap-4">
         <div className="space-y-3">
+          <PlannedTripsSection />
           <SectionTitle>{t('my_trips')}</SectionTitle>
           {active && (
             <Link href="/navigate" className="tap flex items-center gap-3 rounded-2xl bg-bad px-4 py-3 text-white shadow">
@@ -237,4 +239,15 @@ function TripDetail({ id }: { id: string }) {
       </div>
     </div>
   );
+}
+
+function PlannedTripsSection() {
+  const { t } = useT();
+  const [has, setHas] = useState(false);
+  useEffect(() => {
+    const f = () => import('@/lib/nav/db').then((m) => m.allPlans()).then((l) => setHas(l.length > 0)).catch(() => {});
+    f(); return onNavData(f);
+  }, []);
+  if (!has) return null;
+  return (<><SectionTitle>{t('ai_planned')}</SectionTitle><PlannedTrips /></>);
 }

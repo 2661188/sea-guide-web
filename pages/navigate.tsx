@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import {
-  Anchor, Check, Crosshair, Download, Flag, House, Layers, LifeBuoy, LocateFixed, MapPin, MapPinPlus, Minus, Navigation, Navigation2,
+  Anchor, Check, Crosshair, Keyboard, Download, Flag, House, Layers, LifeBuoy, LocateFixed, MapPin, MapPinPlus, Minus, Navigation, Navigation2,
   Pencil, Play, Plus, RefreshCw, Route as RouteIcon, Satellite, Square, Trash2, TriangleAlert, Undo2, Upload, WifiOff, Wrench, X,
 } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
@@ -13,6 +13,9 @@ import { WaypointSheet } from '@/components/nav/WaypointSheet';
 import { MiniChart } from '@/components/nav/MiniChart';
 import { kindOf } from '@/components/nav/kinds';
 import { EmergencySheet } from '@/components/EmergencySheet';
+import { CaptainPanel, MicButton } from '@/components/ai/CaptainPanel';
+import { CaptainSheet } from '@/components/CaptainSheet';
+import { useCaptain } from '@/lib/ai/captain';
 import { TripStats } from '@/components/TripSummary';
 import { Sheet } from '@/components/Sheet';
 import { useT } from '@/lib/i18n/LangContext';
@@ -22,11 +25,13 @@ import { endTrip, releaseGps, setReturning, startGps, startTrip, TrackerState, u
 import { allRoutes, allWaypoints, deleteTrip, deleteWaypoint, newId, notifyNavData, onNavData, putRoute, putTrip, putWaypoint, Route, RoutePoint, Trip, Waypoint } from '@/lib/nav/db';
 import { bearing, distanceNm, distUnit, fmtDist, fmtDuration, fmtLat, fmtLon, pathNm } from '@/lib/nav/geo';
 import { MIN_COG_KN } from '@/lib/nav/gpsfilter';
-import { anchorDriftM, followRoute, goTo, setAnchor, useGuide } from '@/lib/nav/guide';
+import { anchorDriftM, computeGuidance, followRoute, goTo, setAnchor, useGuide } from '@/lib/nav/guide';
+import { timeToGo } from '@/lib/nav/eta';
+import { returnInfo } from '@/lib/nav/returnPath';
+import { useEtaText } from '@/components/nav/Guidance';
 import { MapLayer, useNavSettings } from '@/lib/nav/settings';
 import { exportAllGpx, importGpxFile } from '@/lib/nav/transfer';
 import { load, save } from '@/lib/storage';
-import { useFmtHours } from '@/components/nav/RouteLegs';
 
 type Mode = 'view' | 'addwp' | 'plan';
 type Tab = 'nav' | 'marks' | 'routes' | 'tools';
@@ -55,7 +60,7 @@ export default function Navigate() {
   const guide = useGuide();
   const [nav, setNav] = useNavSettings();
   const online = useOnline();
-  const fh = useFmtHours();
+  const cap = useCaptain();
   const chart = useRef<ChartHandle>(null);
   const viewRef = useRef<CView | null>(null);
 
@@ -74,6 +79,7 @@ export default function Navigate() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [layersOpen, setLayersOpen] = useState(false);
   const [sos, setSos] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
   const [endAsk, setEndAsk] = useState(false);
   const [done, setDone] = useState<{ trip: Trip; track: [number, number][] } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -125,7 +131,8 @@ export default function Navigate() {
     if (handled.current || !router.isReady || !loaded) return;
     handled.current = true;
     const q = router.query;
-    if (!q.goto && !q.route && !q.wp && !q.edit && !q.plan) return;
+    if (q.sos) setSos(true);
+    if (!q.goto && !q.route && !q.wp && !q.edit && !q.plan) { if (q.sos) router.replace('/navigate', undefined, { shallow: true }); return; }
     const w = wps.find((x) => x.id === (q.goto || q.wp));
     if (w && q.goto) startGoto({ lat: w.lat, lon: w.lon, name: w.name, wpId: w.id });
     if (w && q.wp) { setSelWp(w); setFollow(false); chart.current?.setView({ lon: w.lon, lat: w.lat, z: 14 }); }
@@ -139,21 +146,10 @@ export default function Navigate() {
   const allow = () => { save('gpsAsked', true); setAsked(true); startGps(); };
 
   // ---------- Return to start: follow the recorded track back ----------
-  const ret = useMemo(() => {
-    if (!s.returning || !pos || !start) return null;
-    const tr = s.track;
-    let k = 0, best = tr.length ? Infinity : distanceNm(pos, start);
-    tr.forEach(([lon, lat], i) => { const d = distanceNm(pos, { lat, lon }); if (d < best) { best = d; k = i; } });
-    let along = best;
-    for (let i = k; i > 0; i--) along += distanceNm({ lon: tr[i][0], lat: tr[i][1] }, { lon: tr[i - 1][0], lat: tr[i - 1][1] });
-    if (tr.length) along += distanceNm({ lon: tr[0][0], lat: tr[0][1] }, start);
-    let j = k, acc = best;
-    while (j > 0 && acc < 0.08) { acc += distanceNm({ lon: tr[j][0], lat: tr[j][1] }, { lon: tr[j - 1][0], lat: tr[j - 1][1] }); j--; }
-    const target = tr.length ? { lon: tr[j][0], lat: tr[j][1] } : start;
-    const path: [number, number][] = [[pos.lon, pos.lat], ...tr.slice(0, k + 1).reverse(), [start.lon, start.lat]];
-    return { along, direct: distanceNm(pos, start), brgStart: bearing(pos, start), steer: bearing(pos, target), path };
-  }, [s.returning, pos, start, s.track]);
-  const sogForEta = moving ? pos!.speedKn! : null;
+  const ret = useMemo(() => (s.returning ? returnInfo(pos, start, s.track) : null), [s.returning, pos, start, s.track]);
+  // Time to go / ETA always come from the navigation engine (lib/nav/eta.ts).
+  const et = useEtaText();
+  const retEta = timeToGo({ distNm: ret?.along ?? null, pos, lost: s.gps === 'lost' });
 
   // ---------- Waypoints ----------
   const draftWp = (lat: number, lon: number): Waypoint => ({ id: '', name: t('wp_default', { n: wps.length + 1 }), kind: 'mark', lat, lon, at: 0 });
@@ -181,6 +177,14 @@ export default function Navigate() {
     setFollow(false);
     chart.current?.fit(p ? [[target.lon, target.lat], [p.lon, p.lat]] : [[target.lon, target.lat]], 15);
   }
+  const saveHome = async (p: LL) => {
+    const old = wps.find((w) => w.kind === 'home');
+    const w: Waypoint = old ? { ...old, lat: p.lat, lon: p.lon } : { id: newId(), name: t('wk_home'), kind: 'home', lat: p.lat, lon: p.lon, at: Date.now() };
+    await putWaypoint(w).catch(() => {});
+    notifyNavData();
+    setSel(null);
+    setToast(t('home_saved'));
+  };
   const delWp = async (w: Waypoint) => {
     if (!confirmDelWp) { setConfirmDelWp(true); setTimeout(() => setConfirmDelWp(false), 3500); return; }
     await deleteWaypoint(w.id).catch(() => {});
@@ -269,6 +273,7 @@ export default function Navigate() {
   const elapsed = trip ? Date.now() - trip.startedAt : 0;
   const a = guide.active;
   const activeTarget = a && !a.arrived ? a.pts[a.leg] : null;
+  const gotoEta = a && pos ? computeGuidance(a, pos, s.gps === 'lost')?.eta ?? null : null;
   const shownRoute = plan ? null : selRoute;
   const wpsByDist = useMemo(() => (pos ? [...wps].sort((x, y) => distanceNm(pos, x) - distanceNm(pos, y)) : wps), [wps, pos]);
   const fromYou = (p: LL) => (fixOk ? t('from_you', { d: `${fmtDist(distanceNm(pos!, p))} ${distUnit(distanceNm(pos!, p))}`, b: pad3(bearing(pos!, p)) }) : null);
@@ -306,7 +311,7 @@ export default function Navigate() {
                     <Navigation2 size={28} fill="#fff" className="shrink-0" style={{ transform: `rotate(${ret.steer - (rotation ?? 0)}deg)` }} />
                     <span className="min-w-0 flex-1">
                       <span className="block text-[11px] font-bold uppercase tracking-wider text-white/85"><House size={12} className="me-1 inline" />{t('return_title')}</span>
-                      <span className="block font-display text-xl font-semibold leading-tight tabular-nums">{fmtDist(ret.along)} {distUnit(ret.along)} · {pad3(ret.brgStart)}° · {sogForEta ? fh(ret.along / sogForEta) : t('eta_na')}</span>
+                      <span className="block font-display text-xl font-semibold leading-tight tabular-nums">{fmtDist(ret.along)} {distUnit(ret.along)} · {pad3(ret.brgStart)}° · {et.ttg(retEta)}</span>
                     </span>
                   </button>
                 )}
@@ -315,7 +320,7 @@ export default function Navigate() {
                     <Navigation2 size={28} fill="#fff" className="shrink-0" style={{ transform: `rotate(${bearing(pos!, activeTarget) - (rotation ?? 0)}deg)` }} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[11px] font-bold uppercase tracking-wider text-white/85"><Flag size={12} className="me-1 inline" />{activeTarget.name || t('destination')}</span>
-                      <span className="block font-display text-xl font-semibold leading-tight tabular-nums">{fmtDist(distanceNm(pos!, activeTarget))} {distUnit(distanceNm(pos!, activeTarget))} · {pad3(bearing(pos!, activeTarget))}° · {sogForEta ? fh(distanceNm(pos!, activeTarget) / sogForEta) : t('eta_na')}</span>
+                      <span className="block font-display text-xl font-semibold leading-tight tabular-nums">{fmtDist(distanceNm(pos!, activeTarget))} {distUnit(distanceNm(pos!, activeTarget))} · {pad3(bearing(pos!, activeTarget))}° · {gotoEta ? et.ttg(gotoEta) : '—'}</span>
                     </span>
                   </button>
                 )}
@@ -336,7 +341,7 @@ export default function Navigate() {
                 {/* Recenter */}
                 {!follow && pos && mode === 'view' && (
                   <button data-chart-ui onClick={() => { setFollow(true); chart.current?.setView({ lon: pos.lon, lat: pos.lat }); }}
-                    className={`tap absolute start-1/2 flex h-11 -translate-x-1/2 items-center gap-2 rounded-full bg-[#0A84FF] px-4 text-sm font-bold text-white shadow-lg rtl:translate-x-1/2 ${showTripBar ? (sel || selWp ? 'bottom-[13.5rem]' : 'bottom-[5.75rem]') : 'bottom-24'}`}>
+                    className={`tap absolute start-1/2 flex h-11 -translate-x-1/2 items-center gap-2 rounded-full bg-[#0A84FF] px-4 text-sm font-bold text-white shadow-lg rtl:translate-x-1/2 ${showTripBar ? (sel ? 'bottom-[16.5rem]' : selWp ? 'bottom-[13.5rem]' : 'bottom-[5.75rem]') : 'bottom-24'}`}>
                     <LocateFixed size={18} /> {t('recenter')}
                   </button>
                 )}
@@ -355,6 +360,7 @@ export default function Navigate() {
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       <button onClick={() => { setEditWp(draftWp(sel.lat, sel.lon)); setSel(null); }} className="tap flex h-12 items-center justify-center gap-2 rounded-xl bg-abyss font-semibold text-white dark:bg-shallows dark:text-abyss"><MapPinPlus size={18} /> {t('add_wp')}</button>
                       <button onClick={() => startGoto({ lat: sel.lat, lon: sel.lon, name: t('selected_pt') })} className="tap flex h-12 items-center justify-center gap-2 rounded-xl bg-[#C026D3] font-semibold text-white"><Navigation size={18} /> {t('nav_here')}</button>
+                      <button onClick={() => saveHome(sel)} className="tap col-span-2 flex h-11 items-center justify-center gap-2 rounded-xl bg-[#0E9F6E]/10 text-sm font-semibold text-[#0E7A55] dark:text-[#5EE0B0]"><House size={17} /> {t('save_home')}</button>
                     </div>
                   </div>
                 )}
@@ -470,6 +476,11 @@ export default function Navigate() {
           {/* ---------- NAV TAB ---------- */}
           {tab === 'nav' && (
             <>
+              <div className="flex gap-2">
+                <MicButton big className="flex-1" />
+                <button onClick={() => setAskOpen(true)} aria-label={t('ai_title')} title={t('ai_title')} className="tap grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-white/10 dark:ring-white/10"><Keyboard size={24} /></button>
+              </div>
+              {(cap.reply || cap.heard || cap.error) && <CaptainPanel compact />}
               {s.storageError && <Warn tone="bad">{t('storage_err')}</Warn>}
               {!asked && (
                 <section className="card p-4">
@@ -504,7 +515,7 @@ export default function Navigate() {
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-bold uppercase tracking-[0.14em] text-white/80"><House size={13} className="me-1 inline" />{t('return_title')}</p>
                       <p className="readout text-[40px] leading-none"><bdi>{fmtDist(ret.along)}</bdi><span className="ms-1 font-sans text-base font-medium text-white/70">{distUnit(ret.along)}</span></p>
-                      <p className="mt-1 text-sm text-white/90">{t('bearing')} <b className="tabular-nums">{pad3(ret.brgStart)}°</b> · {t('eta')} <b>{sogForEta ? fh(ret.along / sogForEta) : t('eta_na')}</b></p>
+                      <p className="mt-1 text-sm text-white/90">{t('bearing')} <b className="tabular-nums">{pad3(ret.brgStart)}°</b> · {t('ttg')} <b>{et.ttg(retEta)}</b> · {t('eta')} <b className="tabular-nums">{et.clock(retEta)}</b></p>
                       <p className="text-xs text-white/75">{t('to_start')} {fmtDist(ret.direct)} {distUnit(ret.direct)}</p>
                     </div>
                   </div>
@@ -512,7 +523,7 @@ export default function Navigate() {
                 </section>
               )}
               {trip && !start && <Warn tone="info"><Flag size={13} className="me-1 inline" />{t('return_no_start')}</Warn>}
-              {a && <GuidanceCard a={a} pos={fixOk ? pos : null} />}
+              {a && <GuidanceCard a={a} pos={pos} lost={s.gps === 'lost'} />}
               {guide.anchor && <AnchorCard an={guide.anchor} pos={fixOk ? pos : null} />}
 
               <section className="grid grid-cols-2 gap-2">
@@ -671,6 +682,7 @@ export default function Navigate() {
           </div>
         </Sheet>
       )}
+      <CaptainSheet open={askOpen} onClose={() => setAskOpen(false)} />
       <EmergencySheet open={sos} onClose={() => setSos(false)} pos={pos} canReturn={!!trip && !!start} onReturn={() => { if (start) { setReturning(true); setFollow(true); } }} onSave={markHere} />
       {done && <TripDone trip={done.trip} track={done.track} onClose={() => setDone(null)} onOpen={() => router.push(`/trips?trip=${done.trip.id}`)} />}
     </AppShell>
