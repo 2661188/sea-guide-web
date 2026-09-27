@@ -129,7 +129,7 @@ interface Props {
   seamarks?: boolean;
   initial?: CView;
   className?: string;
-  children?: (p: ChartProject, v: CView & { w: number; h: number }) => ReactNode;
+  children?: (p: ChartProject, v: CView & { w: number; h: number; rot: number }) => ReactNode;
   overlay?: ReactNode; // HTML on top (buttons etc.)
   onTap?: (lon: number, lat: number, x: number, y: number) => void;
   onLongPress?: (lon: number, lat: number) => void;
@@ -137,15 +137,31 @@ interface Props {
   onViewChange?: (v: CView) => void;
   doubleTapZoom?: boolean;
   label?: string;
+  rotation?: number | null; // course-up: this bearing is drawn at the top (null = north up)
 }
 
 export const ChartView = forwardRef<ChartHandle, Props>(function ChartView(
-  { layer, seamarks = false, initial, className = '', children, overlay, onTap, onLongPress, onUserMove, onViewChange, doubleTapZoom = true, label }, ref) {
+  { layer, seamarks = false, initial, className = '', children, overlay, onTap, onLongPress, onUserMove, onViewChange, doubleTapZoom = true, label, rotation = null }, ref) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [v, setV] = useState<CView>(initial ?? { lon: 54.4, lat: 24.7, z: 7 });
   const vr = useRef(v); vr.current = v;
   const sr = useRef(size); sr.current = size;
+  const rot = rotation ?? 0;
+  const rr = useRef(rotation); rr.current = rotation;
+  // In course-up the content is a rotated square big enough to cover the corners.
+  const inner = () => { const { w, h } = sr.current; if (rr.current == null) return { iw: w, ih: h }; const d = Math.ceil(Math.hypot(w, h)); return { iw: d, ih: d }; };
+  const rotVec = (x: number, y: number) => {
+    if (rr.current == null) return { x, y };
+    const r = (rr.current * Math.PI) / 180, c = Math.cos(r), s2 = Math.sin(r);
+    return { x: x * c - y * s2, y: x * s2 + y * c };
+  };
+  /** Screen point (relative to the box) → point in the (possibly rotated) content. */
+  const toInner = (x: number, y: number) => {
+    const { w, h } = sr.current, { iw, ih } = inner();
+    const q = rotVec(x - w / 2, y - h / 2);
+    return { x: q.x + iw / 2, y: q.y + ih / 2 };
+  };
   const cb = useRef({ onTap, onLongPress, onUserMove, onViewChange, doubleTapZoom });
   cb.current = { onTap, onLongPress, onUserMove, onViewChange, doubleTapZoom };
 
@@ -154,11 +170,12 @@ export const ChartView = forwardRef<ChartHandle, Props>(function ChartView(
     vr.current = c; setV(c); cb.current.onViewChange?.(c);
   }, []);
 
-  const zoomAt = useCallback((x: number, y: number, nz: number) => {
-    const cur = vr.current, { w, h } = sr.current, z = clampZ(nz);
+  const zoomAt = useCallback((sx: number, sy: number, nz: number) => {
+    const cur = vr.current, { iw: w, ih: h } = inner(), z = clampZ(nz);
+    const q = toInner(sx, sy), x = q.x, y = q.y;
     const gl = x2lon(lon2x(cur.lon, cur.z) + x - w / 2, cur.z), ga = y2lat(lat2y(cur.lat, cur.z) + y - h / 2, cur.z);
     update({ z, lon: x2lon(lon2x(gl, z) - (x - w / 2), z), lat: y2lat(lat2y(ga, z) - (y - h / 2), z) });
-  }, [update]);
+  }, [update]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useImperativeHandle(ref, () => ({
     zoomBy: (d) => update({ ...vr.current, z: Math.round(vr.current.z + d) }),
@@ -188,8 +205,8 @@ export const ChartView = forwardRef<ChartHandle, Props>(function ChartView(
   const g = useRef<{ mode: 'pan' | 'pinch'; sx: number; sy: number; wx: number; wy: number; z0: number; d0: number; gl: number; ga: number; moved: boolean; t0: number; long: boolean; lp: ReturnType<typeof setTimeout> | null } | null>(null);
   const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
   const rel = (e: React.PointerEvent) => { const r = box.current!.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-  const unproject = (x: number, y: number) => {
-    const cur = vr.current, { w, h } = sr.current;
+  const unproject = (sx: number, sy: number) => {
+    const cur = vr.current, { iw: w, ih: h } = inner(), { x, y } = toInner(sx, sy);
     return { lon: x2lon(lon2x(cur.lon, cur.z) + x - w / 2, cur.z), lat: y2lat(lat2y(cur.lat, cur.z) + y - h / 2, cur.z) };
   };
   const startPan = (x: number, y: number, moved: boolean) => {
@@ -226,17 +243,18 @@ export const ChartView = forwardRef<ChartHandle, Props>(function ChartView(
     ptrs.current.set(e.pointerId, p);
     const s = g.current;
     if (!s) return;
-    const { w, h } = sr.current;
+    const { iw: w, ih: h } = inner();
     if (s.mode === 'pan') {
       const dx = p.x - s.sx, dy = p.y - s.sy;
       if (!s.moved && Math.abs(dx) + Math.abs(dy) < 7) return;
       if (!s.moved) { s.moved = true; if (s.lp) clearTimeout(s.lp); cb.current.onUserMove?.(); }
       if (s.long) return;
-      update({ z: s.z0, lon: x2lon(s.wx - dx, s.z0), lat: y2lat(s.wy - dy, s.z0) });
+      const d = rotVec(dx, dy);
+      update({ z: s.z0, lon: x2lon(s.wx - d.x, s.z0), lat: y2lat(s.wy - d.y, s.z0) });
     } else if (ptrs.current.size >= 2) {
       const [a, b] = Array.from(ptrs.current.values());
       const z = clampZ(s.z0 + Math.log2((Math.hypot(a.x - b.x, a.y - b.y) || 1) / s.d0));
-      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      const m = toInner((a.x + b.x) / 2, (a.y + b.y) / 2), mx = m.x, my = m.y;
       update({ z, lon: x2lon(lon2x(s.gl, z) - (mx - w / 2), z), lat: y2lat(lat2y(s.ga, z) - (my - h / 2), z) });
     }
   };
@@ -270,7 +288,9 @@ export const ChartView = forwardRef<ChartHandle, Props>(function ChartView(
     if (k[e.key]) { e.preventDefault(); k[e.key](); cb.current.onUserMove?.(); }
   };
 
-  const { w, h } = size;
+  const { w: bw, h: bh } = size;
+  const dd = rotation == null ? 0 : Math.ceil(Math.hypot(bw, bh));
+  const w = rotation == null ? bw : dd, h = rotation == null ? bh : dd;
   const project: ChartProject = useMemo(() => {
     const cx = lon2x(v.lon, v.z), cy = lat2y(v.lat, v.z);
     return (lon, lat) => [w / 2 + lon2x(lon, v.z) - cx, h / 2 + lat2y(lat, v.z) - cy];
@@ -299,8 +319,8 @@ export const ChartView = forwardRef<ChartHandle, Props>(function ChartView(
       className={`relative select-none overflow-hidden bg-[#AAD3DF] outline-none focus-visible:ring-2 focus-visible:ring-lagoon dark:bg-[#0A3550] ${className}`}
       style={{ touchAction: 'none' }}
       onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onKeyDown={onKey}>
-      {w > 0 && (
-        <>
+      {bw > 0 && (
+        <div className="absolute" style={{ left: (bw - w) / 2, top: (bh - h) / 2, width: w, height: h, transform: rotation == null ? undefined : `rotate(${-rot}deg)`, transition: 'transform .6s ease-out' }}>
           <svg className="absolute inset-0 h-full w-full" aria-hidden="true">
             <g transform={landTf}>
               <path d={land} className="fill-[#F2EFE9] stroke-[#B9AE92] dark:fill-[#1C3A4A] dark:stroke-[#2F5467]" strokeWidth="1" vectorEffect="non-scaling-stroke" />
@@ -309,8 +329,8 @@ export const ChartView = forwardRef<ChartHandle, Props>(function ChartView(
           </svg>
           {base && <div className="absolute inset-0"><TileLayerView layer={base} v={v} w={w} h={h} /></div>}
           {seamarks && <div className="absolute inset-0"><TileLayerView layer={SEAMARKS} v={v} w={w} h={h} /></div>}
-          <svg className="pointer-events-none absolute inset-0 h-full w-full" direction="ltr">{children?.(project, { ...v, w, h })}</svg>
-        </>
+          <svg className="pointer-events-none absolute inset-0 h-full w-full" direction="ltr">{children?.(project, { ...v, w, h, rot: rotation == null ? 0 : rot })}</svg>
+        </div>
       )}
       <div className="pointer-events-none absolute bottom-1.5 start-2 flex flex-col items-start" dir="ltr">
         <span className="rounded bg-white/80 px-1 text-[10px] font-semibold text-slate-700 dark:bg-black/50 dark:text-slate-200">{bar.label}</span>
