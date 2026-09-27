@@ -5,6 +5,7 @@ import { load, save } from '@/lib/storage';
 import type { RoutePoint } from './db';
 import { alongTrackNm, bearing, crossTrackNm, distanceNm, Fix, nmToM } from './geo';
 import { getNav } from './settings';
+import { closingSpeed, EtaResult, timeToGo } from './eta';
 import { getTracker, holdGps, Position, subscribeTracker } from './tracker';
 
 export interface Active {
@@ -87,15 +88,17 @@ export interface Guidance {
   dtw: number; // NM to the next point
   btw: number; // bearing to it, degrees true
   xte: number | null; // NM, + = you are right of the line (steer left)
-  ttg: number | null; // hours to the next point at current speed
+  ttg: number | null; // hours to the next point (null when no meaningful estimate)
+  eta: EtaResult; // full result for the next point, with the reason when unavailable
   remaining: number; // NM to the end of the route through the remaining points
   ttgEnd: number | null;
+  etaEnd: EtaResult;
   vmg: number | null; // knots made good towards the next point
   leg: number;
   legs: number;
 }
 
-export function computeGuidance(a: Active, pos: Position | null): Guidance | null {
+export function computeGuidance(a: Active, pos: Position | null, lost = false): Guidance | null {
   const target = a.pts[a.leg];
   if (!target || !pos) return null;
   const from = a.leg > 0 ? a.pts[a.leg - 1] : null;
@@ -104,12 +107,13 @@ export function computeGuidance(a: Active, pos: Position | null): Guidance | nul
   const xte = from && distanceNm(from, target) > 0.005 ? crossTrackNm(from, target, pos) : null;
   let remaining = dtw;
   for (let i = a.leg; i < a.pts.length - 1; i++) remaining += distanceNm(a.pts[i], a.pts[i + 1]);
-  const spd = pos.speedKn ?? 0;
-  const vmg = pos.cog != null && spd > 0.3 ? spd * Math.cos(((pos.cog - btw) * Math.PI) / 180) : null;
-  const sog = vmg != null && vmg > 0.5 ? vmg : spd > 0.8 ? spd : null;
+  const vmg = closingSpeed(pos, btw);
+  // Next point: must be closing on it. Whole route: follows the legs, so ground speed is used.
+  const eta = a.arrived ? { status: 'arrived' as const, hours: null, etaMs: null, speedKn: null } : timeToGo({ distNm: dtw, pos, lost, closingKn: vmg });
+  const etaEnd = a.arrived ? eta : timeToGo({ distNm: remaining, pos, lost });
   return {
-    target, from, dtw, btw, xte, remaining, vmg,
-    ttg: sog ? dtw / sog : null, ttgEnd: sog ? remaining / sog : null,
+    target, from, dtw, btw, xte, remaining, vmg, eta, etaEnd,
+    ttg: eta.hours, ttgEnd: etaEnd.hours,
     leg: a.kind === 'goto' ? 1 : a.leg, legs: a.kind === 'goto' ? 1 : a.pts.length - 1,
   };
 }

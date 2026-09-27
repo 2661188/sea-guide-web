@@ -57,5 +57,6 @@ export function legPlan(nm: number, s: NavSettings) {
 export const fmtHours = (h: number | null) => {
   if (h == null || !Number.isFinite(h)) return '—';
   const m = Math.round(h * 60);
+  if (m < 1) return '<1 min';
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
 };

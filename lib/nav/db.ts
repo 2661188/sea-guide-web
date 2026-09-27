@@ -20,13 +20,45 @@ export interface Waypoint { id: string; name: string; kind: WpKind; lat: number;
 export interface RoutePoint { lat: number; lon: number; name?: string; wpId?: string }
 export interface Route { id: string; name: string; points: RoutePoint[]; createdAt: number; updatedAt: number; notes?: string }
 
+/** A planned trip (made by the voice assistant or by hand). Stored as data, never just as chat text. */
+export interface PlanChecklistItem { id: string; en: string; ar: string; done: boolean }
+export interface PlanConditions {
+  level: string | null; // sea-state level key (lvl_*), null when data is missing
+  windMaxKn: number | null; gustMaxKn: number | null; waveMaxM: number | null;
+  tide: { type: 'high' | 'low'; at: number; height: number }[];
+  fishingScore: number | null;
+  source: string; fetchedAt: string;
+}
+export interface TripPlan {
+  id: string;
+  name: string;
+  activity: string;
+  date: string; // local YYYY-MM-DD
+  departure: string; // local HH:MM
+  durationH: number;
+  start: { lat: number; lon: number; label: string };
+  destination: { lat: number; lon: number; name: string; wpId?: string } | null;
+  waypoints: RoutePoint[];
+  distanceNm: number | null; // round trip, when a destination is known
+  fuelL: number | null; // estimate for the running distance at cruise speed
+  fuelCarryL: number | null; // with one third in reserve
+  fuelPerHourL: number | null;
+  conditions: PlanConditions | null; // null = no forecast available for that time
+  checklist: PlanChecklistItem[];
+  notes: string;
+  createdBy: 'ai' | 'user';
+  modified: boolean; // changed by the user after creation
+  createdAt: number;
+  updatedAt: number;
+}
+
 const DB = 'bahrna-nav';
 let dbp: Promise<IDBDatabase> | null = null;
 
 function open(): Promise<IDBDatabase> {
   if (dbp) return dbp;
   dbp = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 2);
+    const req = indexedDB.open(DB, 3);
     req.onupgradeneeded = (e) => {
       const db = req.result;
       if (e.oldVersion < 1) {
@@ -36,6 +68,7 @@ function open(): Promise<IDBDatabase> {
         db.createObjectStore('waypoints', { keyPath: 'id' });
       }
       if (e.oldVersion < 2) db.createObjectStore('routes', { keyPath: 'id' });
+      if (e.oldVersion < 3) db.createObjectStore('plans', { keyPath: 'id' });
     };
     req.onblocked = () => { /* another tab has the old version open; it will close on reload */ };
     req.onsuccess = () => { const db = req.result; db.onversionchange = () => { db.close(); dbp = null; }; resolve(db); };
@@ -82,6 +115,10 @@ export const putRoute = (r: Route) => tx<void>('routes', 'readwrite', (s) => { s
 export const getRoute = (id: string) => tx<Route | undefined>('routes', 'readonly', (s) => s.get(id));
 export const allRoutes = () => tx<Route[]>('routes', 'readonly', (s) => s.getAll()).then((l) => l.sort((a, b) => b.updatedAt - a.updatedAt));
 export const deleteRoute = (id: string) => tx<void>('routes', 'readwrite', (s) => { s.delete(id); });
+
+export const putPlan = (p: TripPlan) => tx<void>('plans', 'readwrite', (s) => { s.put(p); });
+export const allPlans = () => tx<TripPlan[]>('plans', 'readonly', (s) => s.getAll()).then((l) => l.sort((a, b) => `${a.date}${a.departure}`.localeCompare(`${b.date}${b.departure}`)));
+export const deletePlan = (id: string) => tx<void>('plans', 'readwrite', (s) => { s.delete(id); });
 
 /** Tell open screens that saved waypoints/routes/trips changed (e.g. after an import). */
 export function notifyNavData() { if (typeof window !== 'undefined') window.dispatchEvent(new Event('bahrna:navdata')); }
