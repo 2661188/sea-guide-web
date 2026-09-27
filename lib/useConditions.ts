@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Conditions } from './marine/types';
 import { load, save } from './storage';
 import { toLocalMs, nowLocalMs } from './marine/time';
+import { apiUrl } from '@/lib/native/platform';
 
 // In-memory cache shared across screens so switching tabs never refetches.
 const memory = new Map<string, { data: Conditions; at: number }>();
@@ -49,7 +50,7 @@ export function useConditions(spotId: string): ConditionsState {
     try {
       let res: Response;
       try {
-        res = await fetch(`/api/conditions?spot=${encodeURIComponent(spotId)}`);
+        res = await fetch(apiUrl(`/api/conditions?spot=${encodeURIComponent(spotId)}`));
       } catch {
         throw new Error('err_no_internet');
       }

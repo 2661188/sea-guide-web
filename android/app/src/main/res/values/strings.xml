@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Bahrna</string>
+    <string name="title_activity_main">Bahrna</string>
+    <string name="package_name">ae.bahrna.app</string>
+    <string name="custom_url_scheme">ae.bahrna.app</string>
+    <!-- background-geolocation plugin: notification channel shown while a trip / navigation keeps GPS on -->
+    <string name="capacitor_background_geolocation_notification_channel_name">Trip recording and navigation</string>
+    <string name="capacitor_background_geolocation_notification_icon">drawable/ic_stat_bahrna</string>
+</resources>

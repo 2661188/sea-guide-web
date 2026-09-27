@@ -8,6 +8,7 @@ import { Action, createTripPlan, findWaypoint, getFishingConditions, getTripHist
 import { buildChecklist } from './planner';
 import type { Card, Reply } from './answer';
 import type { WpKind } from '@/lib/nav/db';
+import { apiUrl } from '@/lib/native/platform';
 
 type Block = { type: 'text'; text: string } | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> } | { type: 'tool_result'; tool_use_id: string; content: string };
 export interface Msg { role: 'user' | 'assistant'; content: string | Block[] }
@@ -75,7 +76,7 @@ export async function askModel(history: Msg[], text: string, lang: AiLang): Prom
   for (let round = 0; round < 5; round++) {
     let res: Response;
     try {
-      res = await fetch('/api/captain', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: msgs, lang }) });
+      res = await fetch(apiUrl('/api/captain'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: msgs, lang }) });
     } catch { throw new AiUnavailable('offline'); }
     if (res.status === 503) throw new AiUnavailable('not_configured');
     if (!res.ok) throw new AiUnavailable('error');

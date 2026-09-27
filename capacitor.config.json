@@ -1,0 +1,25 @@
+{
+  "appId": "ae.bahrna.app",
+  "appName": "Bahrna",
+  "webDir": "out",
+  "android": {
+    "useLegacyBridge": true,
+    "allowMixedContent": false,
+    "backgroundColor": "#06283D"
+  },
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 800,
+      "backgroundColor": "#06283D",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP"
+    },
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}

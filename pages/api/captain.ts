@@ -3,6 +3,7 @@
 // the tools themselves run on the user's phone (see lib/ai/llm.ts).
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { AI_TOOLS, SYSTEM_PROMPT } from '@/lib/ai/schema';
+import { cors } from '@/lib/server/cors';
 
 export const config = { api: { bodyParser: { sizeLimit: '64kb' } } };
 
@@ -19,6 +20,7 @@ function limited(ip: string) {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (cors(req, res)) return;
   res.setHeader('Cache-Control', 'no-store');
   const key = process.env.ANTHROPIC_API_KEY;
   if (req.method === 'GET') return res.status(200).json({ enabled: !!key });

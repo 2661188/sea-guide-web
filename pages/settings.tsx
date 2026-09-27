@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ExternalLink, Instagram, Monitor, Moon, Phone, Sun, Trash2 } from 'lucide-react';
 import { AppShell, UaeFlag } from '@/components/AppShell';
@@ -14,7 +15,7 @@ import { BoatSettings, TileCacheRow } from '@/components/nav/BoatSettings';
 import { getInstagram, instagramUrl, setInstagram, DEFAULT_INSTAGRAM } from '@/lib/social/instagram';
 import { getAi, setAi, AiSettings, DEFAULT_AI } from '@/lib/ai/captain';
 
-const VERSION = '0.8';
+const VERSION = '0.9';
 
 interface SavedRow { id: string; bytes: number; at: string | null }
 
@@ -156,6 +157,7 @@ export default function SettingsPage() {
             <div className="flex flex-wrap gap-2 pt-1">
               <a href={region.officialForecast.url} target="_blank" rel="noreferrer" className="chip bg-lagoon/10 text-lagoon dark:text-shallows">{forecastName(region, lang)} <ExternalLink size={12} /></a>
               <a href={`tel:${coastGuard.number}`} className="chip bg-bad/10 text-bad"><Phone size={12} /> {contactLabel(coastGuard, lang)} {coastGuard.number}</a>
+              <Link href="/privacy" className="chip bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-200">{lang === 'ar' ? 'سياسة الخصوصية' : 'Privacy policy'}</Link>
             </div>
             <p className="flex items-center gap-2 pt-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
               <UaeFlag className="h-3 w-6 rounded-[2px]" /> {t('made_in')}

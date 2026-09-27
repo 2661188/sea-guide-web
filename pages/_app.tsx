@@ -1,6 +1,8 @@
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
 import { useEffect } from 'react';
+import { useRouter } from 'next/router';
+import { isNative } from '@/lib/native/platform';
 import { watchSystemTheme } from '@/lib/theme';
 import '@fontsource/barlow-condensed/latin-500.css';
 import '@fontsource/barlow-condensed/latin-600.css';
@@ -15,10 +17,19 @@ const icon =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2306283D'/%3E%3Cpath d='M8 38c6 0 6-5 12-5s6 5 12 5 6-5 12-5 6 5 12 5' stroke='%237FD4D0' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M8 48c6 0 6-5 12-5s6 5 12 5 6-5 12-5 6 5 12 5' stroke='%23e0f2fe' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='44' cy='24' r='5' fill='%23FF6B35'/%3E%3C/svg%3E";
 
 export default function App({ Component, pageProps }: AppProps) {
+  const router = useRouter();
   useEffect(() => watchSystemTheme(), []);
-  // Offline app shell (see public/sw.js). Production only, so development is never stale.
+  // Android app: pages are bundled in the APK, and a reload of e.g. /navigate is served
+  // the home page file. Open the page the address asks for.
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'production' || !('serviceWorker' in navigator)) return;
+    if (!isNative() || router.pathname !== '/') return;
+    const path = location.pathname.replace(/\/+$/, '').replace(/\.html$/, '');
+    if (path && path !== '/' && path !== '/index') router.replace(path + location.search);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Offline app shell (see public/sw.js). Production only, so development is never stale.
+  // Not in the Android app: its pages are already on the phone, and a cache could keep old versions after an update.
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production' || isNative() || !('serviceWorker' in navigator)) return;
     navigator.serviceWorker.register('/sw.js').catch(() => { /* not critical */ });
   }, []);
   return (

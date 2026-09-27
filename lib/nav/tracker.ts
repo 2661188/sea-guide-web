@@ -7,6 +7,8 @@ import { load, save } from '@/lib/storage';
 import { addPoint, allTrips, getTrip, newId, putTrip, tripPoints, Trip, TrackPoint } from './db';
 import { bearing, distanceNm } from './geo';
 import { filterFix, newFilter, Position, shouldRecord } from './gpsfilter';
+import { isNative } from '@/lib/native/platform';
+import { nativeKeepAwake, NativeFix, watchNative } from '@/lib/native/location';
 
 export type { Position } from './gpsfilter';
 export type GpsStatus = 'off' | 'searching' | 'ok' | 'weak' | 'lost' | 'denied' | 'unavailable' | 'unsupported';
@@ -30,6 +32,14 @@ const LOST_MS = 20e3; // no fix for this long = "signal lost"
 let state: TrackerState = { gps: 'off', pos: null, lastFixAt: null, trip: null, track: [], returning: false, resumed: false, storageError: false, rejected: 0 };
 const subs = new Set<(s: TrackerState) => void>();
 let watchId: number | null = null;
+// Android app: native watcher (foreground service while a trip / guidance / anchor alarm is on).
+let nativeStop: (() => void) | null = null;
+let nativeStarting = false;
+let nativeBg = false;
+let nativeToken = 0;
+const gpsRunning = () => watchId != null || nativeStop != null || nativeStarting;
+/** Keep GPS running with the screen off only when something is being recorded or watched. */
+const wantBackground = () => !!state.trip || [...holds].some((k) => k !== 'captain');
 let watchStarted = 0;
 let lostTimer: ReturnType<typeof setInterval> | null = null;
 let filter = newFilter();
@@ -45,6 +55,7 @@ function emit(patch: Partial<TrackerState>) {
 }
 
 async function keepAwake(on: boolean) {
+  if (isNative()) { nativeKeepAwake(on); return; }
   try {
     const nav = navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } };
     if (on && nav.wakeLock && !wakeLock && document.visibilityState === 'visible') {
@@ -59,7 +70,11 @@ function storageFailed() { if (!state.storageError) emit({ storageError: true })
 
 function onFix(p: GeolocationPosition) {
   const c = p.coords;
-  const r = filterFix(filter, { lat: c.latitude, lon: c.longitude, acc: c.accuracy, t: p.timestamp || Date.now(), speed: c.speed, heading: c.heading });
+  handleFix({ lat: c.latitude, lon: c.longitude, acc: c.accuracy, t: p.timestamp || Date.now(), speed: c.speed, heading: c.heading });
+}
+
+function handleFix(raw: NativeFix) {
+  const r = filterFix(filter, raw);
   if (!r.ok) {
     // Still hearing from the receiver, but this fix is not trustworthy.
     if (r.reason === 'accuracy') emit({ gps: 'weak', lastFixAt: state.lastFixAt, rejected: filter.rejected });
@@ -101,24 +116,50 @@ function onError(e: GeolocationPositionError) {
 }
 
 function checkLost() {
-  if (watchId == null) return;
+  if (!gpsRunning()) return;
   const now = Date.now();
   if (state.lastFixAt && now - state.lastFixAt > LOST_MS) { if (state.gps !== 'lost') emit({ gps: 'lost' }); }
   else if (!state.lastFixAt && now - watchStarted > LOST_MS && state.gps === 'searching') emit({ gps: 'searching' });
 }
 
 export function startGps() {
-  if (typeof navigator === 'undefined' || !('geolocation' in navigator)) { emit({ gps: 'unsupported' }); return; }
-  if (watchId != null) return;
+  if (typeof window === 'undefined') return;
+  if (gpsRunning()) return;
+  if (!isNative() && !('geolocation' in navigator)) { emit({ gps: 'unsupported' }); return; }
   watchStarted = Date.now();
   emit({ gps: state.pos ? state.gps : 'searching' });
-  watchId = navigator.geolocation.watchPosition(onFix, onError, { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 });
+  if (isNative()) startNative();
+  else watchId = navigator.geolocation.watchPosition(onFix, onError, { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 });
   if (!lostTimer) lostTimer = setInterval(checkLost, 3000);
+}
+
+function startNative() {
+  const token = ++nativeToken;
+  nativeStarting = true;
+  nativeBg = wantBackground();
+  const lang = load<string>('lang', 'en') === 'ar' ? 'ar' : 'en';
+  watchNative(nativeBg, lang, (f) => { if (token === nativeToken) handleFix(f); }, (e) => {
+    if (token !== nativeToken) return;
+    if (e === 'denied') { emit({ gps: 'denied' }); stopWatch(); return; }
+    if (!state.pos) emit({ gps: 'unavailable' });
+  })
+    .then((stop) => { if (token !== nativeToken) { stop(); return; } nativeStarting = false; nativeStop = stop; })
+    .catch(() => { if (token !== nativeToken) return; nativeStarting = false; emit({ gps: 'unavailable' }); });
+}
+
+/** Android app: switch between "only while open" and "keep going with the screen off" when a trip starts or ends. */
+function refreshNativeMode() {
+  if (!isNative() || !gpsRunning() || wantBackground() === nativeBg) return;
+  stopWatch();
+  startGps();
 }
 
 function stopWatch() {
   if (watchId != null) navigator.geolocation.clearWatch(watchId);
   watchId = null;
+  nativeToken++;
+  nativeStarting = false;
+  if (nativeStop) { nativeStop(); nativeStop = null; }
   if (lostTimer) { clearInterval(lostTimer); lostTimer = null; }
 }
 
@@ -129,8 +170,9 @@ export function releaseGps() {
 
 /** Keep GPS (and the screen) on for a feature such as route guidance or the anchor alarm. */
 export function holdGps(key: string, on: boolean) {
-  if (on) { holds.add(key); startGps(); keepAwake(true); return; }
+  if (on) { holds.add(key); startGps(); refreshNativeMode(); keepAwake(true); return; }
   holds.delete(key);
+  refreshNativeMode();
   if (!state.trip && holds.size === 0) keepAwake(false);
 }
 
@@ -150,6 +192,7 @@ export async function startTrip(activity: string, name: string) {
   await putTrip(trip).catch(storageFailed);
   if (good) record(state.pos!);
   startGps();
+  refreshNativeMode();
   keepAwake(true);
 }
 
@@ -161,6 +204,7 @@ export async function endTrip(): Promise<Trip | null> {
   lastRec = null; lastRecCourse = null;
   save('returning', false);
   emit({ trip: null, track: [], returning: false });
+  refreshNativeMode();
   if (holds.size === 0) keepAwake(false);
   return done;
 }
@@ -175,7 +219,7 @@ async function init() {
     if (document.visibilityState !== 'visible') return;
     if (state.trip || holds.size) keepAwake(true);
     // Some browsers silently stop a watch while hidden: restart it on return.
-    if (watchId != null) { stopWatch(); startGps(); }
+    if (watchId != null && !isNative()) { stopWatch(); startGps(); }
   });
   try {
     const active = (await allTrips()).find((t) => t.status === 'active');
@@ -186,6 +230,7 @@ async function init() {
     lastRecCourse = pts.length > 1 ? bearing(pts[pts.length - 2], pts[pts.length - 1]) : null;
     emit({ trip: fresh, track: pts.map((p) => [p.lon, p.lat]), resumed: true, returning: load('returning', false) });
     startGps();
+    refreshNativeMode();
     keepAwake(true);
   } catch { storageFailed(); }
 }

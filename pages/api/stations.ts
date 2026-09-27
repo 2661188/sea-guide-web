@@ -5,10 +5,12 @@ import { mockSeaLevels } from '@/lib/marine/providers/mock';
 import { findExtremes, hourIndex, tideTrend } from '@/lib/marine/tides';
 import { dayKey, nowLocalMs } from '@/lib/marine/time';
 import type { StationsResponse } from '@/lib/marine/types';
+import { cors } from '@/lib/server/cors';
 
 // Tide summary for every station in one provider call (the map screen).
 // Cached at the edge for 15 minutes like /api/conditions.
 export default async function handler(_req: NextApiRequest, res: NextApiResponse) {
+  if (cors(_req, res)) return;
   const region = REGIONS[DEFAULT_REGION];
   try {
     const pts = region.spots.map((s) => ({ lat: s.lat, lon: s.lon }));

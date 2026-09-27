@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { StationsResponse } from './marine/types';
 import { load, save } from './storage';
+import { apiUrl } from '@/lib/native/platform';
 
 let memo: { data: StationsResponse; at: number } | null = null;
 
@@ -15,7 +16,7 @@ export function useStations() {
     const saved = memo?.data ?? load<StationsResponse | null>('stations', null);
     if (saved) { setData(saved); setStatus('ready'); }
     try {
-      const res = await fetch('/api/stations');
+      const res = await fetch(apiUrl('/api/stations'));
       if (!res.ok) throw new Error();
       const json: StationsResponse = await res.json();
       memo = { data: json, at: Date.now() };

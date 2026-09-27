@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">بحرنا</string>
+    <string name="title_activity_main">بحرنا</string>
+    <string name="capacitor_background_geolocation_notification_channel_name">تسجيل الرحلة والملاحة</string>
+</resources>

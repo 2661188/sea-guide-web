@@ -3,7 +3,11 @@
 //    it needs internet unless the phone has offline speech packs).
 //  - Text to speech: speechSynthesis with an Arabic or English voice from the phone.
 // The microphone is only on while the user holds (or taps) the button.
+// In the Android app the WebView has neither, so the phone's native recogniser and
+// text-to-speech engine are used through Capacitor plugins (see lib/native/speech.ts).
 import type { AiLang } from './speakable';
+import { isNative } from '@/lib/native/platform';
+import { nativeListen, nativeSpeak, nativeStopSpeaking } from '@/lib/native/speech';
 
 type Rec = {
   lang: string; interimResults: boolean; continuous: boolean; maxAlternatives: number;
@@ -16,10 +20,12 @@ type Rec = {
 
 export function sttSupported(): boolean {
   if (typeof window === 'undefined') return false;
+  if (isNative()) return true; // availability is checked when listening starts
+
   const w = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
   return !!(w.SpeechRecognition || w.webkitSpeechRecognition);
 }
-export function ttsSupported(): boolean { return typeof window !== 'undefined' && 'speechSynthesis' in window; }
+export function ttsSupported(): boolean { return typeof window !== 'undefined' && (isNative() || 'speechSynthesis' in window); }
 
 export const recLang = (l: AiLang) => (l === 'ar' ? 'ar-AE' : 'en-US');
 
@@ -27,6 +33,7 @@ export interface Listener { stop(): void; abort(): void }
 
 /** Start listening. `hold` keeps listening until stop() (push-to-talk); otherwise it stops at the end of speech. */
 export function listen(lang: AiLang, cb: { partial(t: string): void; final(t: string): void; error(code: string): void; end(): void }, hold: boolean): Listener | null {
+  if (isNative()) return nativeListen(recLang(lang), cb, hold);
   const w = window as unknown as { SpeechRecognition?: new () => Rec; webkitSpeechRecognition?: new () => Rec };
   const C = w.SpeechRecognition || w.webkitSpeechRecognition;
   if (!C) { cb.error('unsupported'); return null; }
@@ -80,6 +87,7 @@ export const hasVoiceFor = (lang: AiLang) => !!pickVoice(lang);
 
 export function speak(text: string, lang: AiLang, cb: { start?(): void; end?(): void } = {}) {
   if (!ttsSupported() || !text) { cb.end?.(); return; }
+  if (isNative()) { nativeSpeak(text, lang, cb); return; }
   const s = window.speechSynthesis;
   s.cancel();
   const u = new SpeechSynthesisUtterance(text);
@@ -99,4 +107,7 @@ export function speak(text: string, lang: AiLang, cb: { start?(): void; end?(): 
   setTimeout(() => { if (!s.speaking) fin(); }, Math.min(30000, 2500 + text.length * 90));
 }
 
-export function stopSpeaking() { if (ttsSupported()) window.speechSynthesis.cancel(); }
+export function stopSpeaking() {
+  if (isNative()) { nativeStopSpeaking(); return; }
+  if (ttsSupported()) window.speechSynthesis.cancel();
+}
