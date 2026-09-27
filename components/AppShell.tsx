@@ -1,7 +1,7 @@
 import { ReactNode, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { BookOpen, ChevronDown, Compass, Fish, House, Map as MapIcon, RefreshCw, Route, Settings, ShipWheel } from 'lucide-react';
+import { BookOpen, ChevronDown, Compass, Fish, House, Map as MapIcon, RefreshCw, Route, Settings, ShipWheel, Mic } from 'lucide-react';
 import { useSpot } from '@/lib/SpotContext';
 import { useT } from '@/lib/i18n/LangContext';
 import type { Key } from '@/lib/i18n/strings';
@@ -110,7 +110,7 @@ export function AppShell({ children, title, status, showSpot = true, hideCaptain
         </nav>
         <button onClick={() => setCaptainOpen(true)}
           className="tap flex h-12 items-center justify-center gap-2 rounded-2xl bg-abyss text-sm font-semibold text-white dark:bg-white/10">
-          <ShipWheel size={20} className="text-shallows" /> {t('captain')}
+          <Mic size={20} className="text-shallows" /> {t('ai_ask')}
         </button>
       </aside>
 
@@ -155,7 +155,7 @@ export function AppShell({ children, title, status, showSpot = true, hideCaptain
       {!hideCaptain && <button onClick={() => setCaptainOpen(true)}
         className="tap fixed end-4 z-40 flex items-center gap-2 rounded-full bg-abyss py-3 pe-4 ps-3.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(6,40,61,.35)] ring-1 ring-white/10 md:end-6 lg:hidden"
         style={{ bottom: 'calc(76px + env(safe-area-inset-bottom) + 12px)' }}>
-        <ShipWheel size={20} className="text-shallows" /> {t('captain')}
+        <Mic size={20} className="text-shallows" /> {t('ai_ask')}
       </button>}
 
       <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/95 backdrop-blur-md dark:border-white/10 dark:bg-[#06283D]/95 lg:hidden">
