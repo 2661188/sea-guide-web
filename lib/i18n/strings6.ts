@@ -22,7 +22,7 @@ export const en6 = {
   coordinates: 'Coordinates', coord_hint: 'Type or paste, e.g. 25°04.512′N 055°07.404′E or 25.0752, 55.1234',
   coord_bad: 'Check the coordinates: they could not be read.', depth_m: 'Depth (m)', notes: 'Notes',
   go_to: 'Go to', drop_here: 'Drop at crosshair', at_boat: 'At my boat', no_wps: 'No waypoints yet. Press and hold on the chart, or tap Add waypoint.',
-  wk_mark: 'Mark', wk_fish: 'Fishing', wk_dive: 'Dive', wk_anchor: 'Anchorage', wk_marina: 'Marina', wk_ramp: 'Ramp', wk_fuel: 'Fuel', wk_hazard: 'Hazard', wk_fav: 'Favourite',
+  wk_mark: 'Other', wk_fish: 'Fishing', wk_dive: 'Dive', wk_anchor: 'Anchorage', wk_marina: 'Marina', wk_ramp: 'Ramp', wk_fuel: 'Fuel', wk_hazard: 'Hazard', wk_fav: 'Favourite',
 
   // Routes
   route: 'Route', route_default: 'Route {n}', new_route: 'New route', edit_route: 'Edit route', route_name: 'Route name',
@@ -78,7 +78,7 @@ export const ar6: Record<keyof typeof en6, string> = {
   coordinates: 'الإحداثيات', coord_hint: 'اكتب أو الصق، مثل 25°04.512′N 055°07.404′E أو 25.0752, 55.1234',
   coord_bad: 'تحقق من الإحداثيات: تعذّرت قراءتها.', depth_m: 'العمق (م)', notes: 'ملاحظات',
   go_to: 'اذهب إلى', drop_here: 'ضع عند العلامة', at_boat: 'عند قاربي', no_wps: 'لا توجد نقاط بعد. اضغط مطولاً على الخريطة أو اختر إضافة نقطة.',
-  wk_mark: 'علامة', wk_fish: 'صيد', wk_dive: 'غوص', wk_anchor: 'مرسى', wk_marina: 'مارينا', wk_ramp: 'منزلق', wk_fuel: 'وقود', wk_hazard: 'خطر', wk_fav: 'مفضلة',
+  wk_mark: 'أخرى', wk_fish: 'صيد', wk_dive: 'غوص', wk_anchor: 'مرسى', wk_marina: 'مارينا', wk_ramp: 'منزلق', wk_fuel: 'وقود', wk_hazard: 'خطر', wk_fav: 'مفضلة',
 
   route: 'المسار', route_default: 'مسار {n}', new_route: 'مسار جديد', edit_route: 'تعديل المسار', route_name: 'اسم المسار',
   plan_route: 'خطط مساراً', plan_hint: 'اضغط على الخريطة لإضافة نقاط. اضغط قرب نقطة محفوظة لاستخدامها.', plan_pts: '{n} نقاط',

@@ -3,6 +3,7 @@
 
 import { en5, ar5 } from './strings5';
 import { en6, ar6 } from './strings6';
+import { en7, ar7 } from './strings7';
 
 export type Lang = 'en' | 'ar';
 export const LANGS: { id: Lang; label: string; dir: 'ltr' | 'rtl' }[] = [
@@ -158,13 +159,14 @@ const enBase = {
   slider_label: 'Time to check the tide',
   tagline: 'Tides, weather & watersports',
 };
-const en = { ...enBase, ...en5, ...en6 };
+const en = { ...enBase, ...en5, ...en6, ...en7 };
 
 export type Key = keyof typeof en;
 
 const ar: Record<Key, string> = {
   ...ar5,
   ...ar6,
+  ...ar7,
   app_name: 'بحرنا',
   nav_home: 'الرئيسية', nav_map: 'الخريطة', nav_fishing: 'الصيد', nav_trips: 'الرحلات', nav_learn: 'تعلّم',
   captain: 'القبطان',
