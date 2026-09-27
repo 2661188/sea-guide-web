@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import {
-  Anchor, Check, Crosshair, Download, Flag, Layers, LifeBuoy, LocateFixed, MapPin, MapPinPlus, Minus, Navigation, Play, Plus,
-  RefreshCw, Route as RouteIcon, Satellite, Square, Undo2, Upload, Wrench, X,
+  Anchor, Check, Crosshair, Download, Flag, House, Layers, LifeBuoy, LocateFixed, MapPin, MapPinPlus, Minus, Navigation, Navigation2,
+  Pencil, Play, Plus, RefreshCw, Route as RouteIcon, Satellite, Square, Trash2, TriangleAlert, Undo2, Upload, WifiOff, Wrench, X,
 } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
 import { ChartHandle, ChartView, CView, mPerPx } from '@/components/ChartView';
-import { AnchorCircle, BearingLine, BoatMarker, DashLine, RouteLine, StartMarker, TrackLine, WaypointMarkers } from '@/components/nav/ChartLayers';
+import { AnchorCircle, BearingLine, BoatMarker, DashLine, RouteLine, SelectedMarker, StartMarker, TrackLine, WaypointMarkers } from '@/components/nav/ChartLayers';
 import { AnchorCard, GuidanceCard } from '@/components/nav/Guidance';
 import { LegsTable, RouteDetail, RouteTotals } from '@/components/nav/RouteLegs';
 import { WaypointSheet } from '@/components/nav/WaypointSheet';
+import { MiniChart } from '@/components/nav/MiniChart';
 import { kindOf } from '@/components/nav/kinds';
 import { EmergencySheet } from '@/components/EmergencySheet';
 import { TripStats } from '@/components/TripSummary';
@@ -17,26 +18,44 @@ import { Sheet } from '@/components/Sheet';
 import { useT } from '@/lib/i18n/LangContext';
 import type { Key } from '@/lib/i18n/strings';
 import { useSpot } from '@/lib/SpotContext';
-import { endTrip, releaseGps, setReturning, startGps, startTrip, useTracker } from '@/lib/nav/tracker';
-import { allRoutes, allWaypoints, deleteTrip, newId, notifyNavData, onNavData, putRoute, putTrip, putWaypoint, Route, RoutePoint, Trip, Waypoint } from '@/lib/nav/db';
+import { endTrip, releaseGps, setReturning, startGps, startTrip, TrackerState, useTracker } from '@/lib/nav/tracker';
+import { allRoutes, allWaypoints, deleteTrip, deleteWaypoint, newId, notifyNavData, onNavData, putRoute, putTrip, putWaypoint, Route, RoutePoint, Trip, Waypoint } from '@/lib/nav/db';
 import { bearing, distanceNm, distUnit, fmtDist, fmtDuration, fmtLat, fmtLon, pathNm } from '@/lib/nav/geo';
+import { MIN_COG_KN } from '@/lib/nav/gpsfilter';
 import { anchorDriftM, followRoute, goTo, setAnchor, useGuide } from '@/lib/nav/guide';
 import { MapLayer, useNavSettings } from '@/lib/nav/settings';
 import { exportAllGpx, importGpxFile } from '@/lib/nav/transfer';
 import { load, save } from '@/lib/storage';
-import { untilMsg } from '@/lib/marine/time';
+import { useFmtHours } from '@/components/nav/RouteLegs';
 
 type Mode = 'view' | 'addwp' | 'plan';
 type Tab = 'nav' | 'marks' | 'routes' | 'tools';
 interface Plan { id?: string; name: string; pts: RoutePoint[] }
+type LL = { lat: number; lon: number };
+
+const pad3 = (n: number) => String(Math.round(((n % 360) + 360) % 360)).padStart(3, '0');
+const ago = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 90 ? `${s} s` : `${Math.round(s / 60)} min`; };
+
+function useOnline() {
+  const [on, setOn] = useState(true);
+  useEffect(() => {
+    const f = () => setOn(navigator.onLine);
+    f();
+    window.addEventListener('online', f); window.addEventListener('offline', f);
+    return () => { window.removeEventListener('online', f); window.removeEventListener('offline', f); };
+  }, []);
+  return on;
+}
 
 export default function Navigate() {
-  const { t, tm } = useT();
+  const { t } = useT();
   const router = useRouter();
   const { activity, spot } = useSpot();
   const s = useTracker();
   const guide = useGuide();
   const [nav, setNav] = useNavSettings();
+  const online = useOnline();
+  const fh = useFmtHours();
   const chart = useRef<ChartHandle>(null);
   const viewRef = useRef<CView | null>(null);
 
@@ -48,19 +67,25 @@ export default function Navigate() {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [editWp, setEditWp] = useState<Waypoint | null>(null);
-  const [selWp, setSelWp] = useState<string | null>(null);
+  const [sel, setSel] = useState<LL | null>(null); // tapped location
+  const [selWp, setSelWp] = useState<Waypoint | null>(null); // tapped waypoint
+  const [confirmDelWp, setConfirmDelWp] = useState(false);
   const [selRoute, setSelRoute] = useState<Route | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [layersOpen, setLayersOpen] = useState(false);
   const [sos, setSos] = useState(false);
-  const [confirmEnd, setConfirmEnd] = useState(false);
-  const [done, setDone] = useState<Trip | null>(null);
+  const [endAsk, setEndAsk] = useState(false);
+  const [done, setDone] = useState<{ trip: Trip; track: [number, number][] } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [, tick] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const firstFix = useRef(true);
+  const rotRef = useRef(0);
 
-  const initialView = useMemo<CView>(() => load<CView | null>('navView', null) ?? { lon: spot.lon, lat: spot.lat, z: 11 }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Same view on the server and the first client render (avoids a hydration mismatch);
+  // the last-used view is restored right after mounting.
+  const initialView = useMemo<CView>(() => ({ lon: spot.lon, lat: spot.lat, z: 11 }), []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const v = load<CView | null>('navView', null); if (v && firstFix.current) chart.current?.setView(v); }, []);
 
   const reload = useCallback(() => {
     Promise.all([allWaypoints().then(setWps), allRoutes().then(setRoutes)]).catch(() => {}).finally(() => setLoaded(true));
@@ -75,8 +100,10 @@ export default function Navigate() {
   }, []);
 
   const pos = s.pos;
+  const fixOk = !!pos && s.gps !== 'lost';
   const trip = s.trip;
   const start = trip?.start ?? null;
+  const moving = fixOk && (pos!.speedKn ?? 0) >= MIN_COG_KN && pos!.cog != null;
 
   // Keep the boat in view while following.
   useEffect(() => {
@@ -84,6 +111,13 @@ export default function Navigate() {
     if (firstFix.current) { firstFix.current = false; chart.current?.setView({ lon: pos.lon, lat: pos.lat, z: Math.max(13, viewRef.current?.z ?? 13) }); return; }
     chart.current?.setView({ lon: pos.lon, lat: pos.lat });
   }, [pos, follow]);
+
+  // Course-up: rotate only from a reliable GPS course while moving; otherwise hold the last angle.
+  if (nav.orient === 'course' && moving) {
+    const prev = rotRef.current;
+    rotRef.current = prev + ((((pos!.cog! - prev) % 360) + 540) % 360) - 180;
+  }
+  const rotation = nav.orient === 'course' ? rotRef.current : null;
 
   // Deep links: /navigate?goto=<wp> · ?wp=<wp> · ?route=<id> · ?edit=<routeId> · ?plan=1
   const handled = useRef(false);
@@ -93,8 +127,8 @@ export default function Navigate() {
     const q = router.query;
     if (!q.goto && !q.route && !q.wp && !q.edit && !q.plan) return;
     const w = wps.find((x) => x.id === (q.goto || q.wp));
-    if (w && q.goto) startGoto(w);
-    if (w && q.wp) { setSelWp(w.id); setFollow(false); setTab('marks'); chart.current?.setView({ lon: w.lon, lat: w.lat, z: 14 }); }
+    if (w && q.goto) startGoto({ lat: w.lat, lon: w.lon, name: w.name, wpId: w.id });
+    if (w && q.wp) { setSelWp(w); setFollow(false); chart.current?.setView({ lon: w.lon, lat: w.lat, z: 14 }); }
     const r = routes.find((x) => x.id === (q.route || q.edit));
     if (r && q.route) navigateRoute(r, r.points);
     if (r && q.edit) startPlan(r);
@@ -104,19 +138,22 @@ export default function Navigate() {
 
   const allow = () => { save('gpsAsked', true); setAsked(true); startGps(); };
 
-  // ---------- Return to start (follows the recorded track back) ----------
+  // ---------- Return to start: follow the recorded track back ----------
   const ret = useMemo(() => {
-    if (!s.returning || !pos || !start || s.track.length < 1) return null;
-    let k = 0, best = Infinity;
-    s.track.forEach(([lon, lat], i) => { const d = distanceNm(pos, { lat, lon }); if (d < best) { best = d; k = i; } });
+    if (!s.returning || !pos || !start) return null;
+    const tr = s.track;
+    let k = 0, best = tr.length ? Infinity : distanceNm(pos, start);
+    tr.forEach(([lon, lat], i) => { const d = distanceNm(pos, { lat, lon }); if (d < best) { best = d; k = i; } });
     let along = best;
-    for (let i = k; i > 0; i--) along += distanceNm({ lon: s.track[i][0], lat: s.track[i][1] }, { lon: s.track[i - 1][0], lat: s.track[i - 1][1] });
+    for (let i = k; i > 0; i--) along += distanceNm({ lon: tr[i][0], lat: tr[i][1] }, { lon: tr[i - 1][0], lat: tr[i - 1][1] });
+    if (tr.length) along += distanceNm({ lon: tr[0][0], lat: tr[0][1] }, start);
     let j = k, acc = best;
-    while (j > 0 && acc < 0.08) { acc += distanceNm({ lon: s.track[j][0], lat: s.track[j][1] }, { lon: s.track[j - 1][0], lat: s.track[j - 1][1] }); j--; }
-    const target = { lon: s.track[j][0], lat: s.track[j][1] };
-    const path: [number, number][] = [[pos.lon, pos.lat], ...s.track.slice(0, k + 1).reverse()];
+    while (j > 0 && acc < 0.08) { acc += distanceNm({ lon: tr[j][0], lat: tr[j][1] }, { lon: tr[j - 1][0], lat: tr[j - 1][1] }); j--; }
+    const target = tr.length ? { lon: tr[j][0], lat: tr[j][1] } : start;
+    const path: [number, number][] = [[pos.lon, pos.lat], ...tr.slice(0, k + 1).reverse(), [start.lon, start.lat]];
     return { along, direct: distanceNm(pos, start), brgStart: bearing(pos, start), steer: bearing(pos, target), path };
   }, [s.returning, pos, start, s.track]);
+  const sogForEta = moving ? pos!.speedKn! : null;
 
   // ---------- Waypoints ----------
   const draftWp = (lat: number, lon: number): Waypoint => ({ id: '', name: t('wp_default', { n: wps.length + 1 }), kind: 'mark', lat, lon, at: 0 });
@@ -125,30 +162,36 @@ export default function Navigate() {
     const v = chart.current?.getView();
     if (!v) return null;
     const m = mPerPx(v);
-    let best: Waypoint | null = null, bd = 28;
+    let best: Waypoint | null = null, bd = 30;
     for (const w of wps) { const px = (distanceNm({ lat, lon }, w) * 1852) / m; if (px < bd) { bd = px; best = w; } }
     return best;
   };
-  const quickSave = async () => {
-    if (!pos) return;
-    const w: Waypoint = { ...draftWp(pos.lat, pos.lon), id: newId(), at: Date.now() };
+  const markHere = async () => {
+    if (!fixOk) { setToast(t('em_no_fix')); return; }
+    const w: Waypoint = { ...draftWp(pos!.lat, pos!.lon), id: newId(), at: Date.now() };
     await putWaypoint(w).catch(() => {});
     notifyNavData();
     setToast(t('point_saved'));
   };
-  function startGoto(w: Waypoint) {
+  function startGoto(target: RoutePoint) {
     if (!asked) allow();
-    goTo({ lat: w.lat, lon: w.lon, name: w.name, wpId: w.id });
-    setTab('nav'); setMode('view'); setSelWp(w.id);
+    goTo(target);
+    setTab('nav'); setMode('view'); setSel(null); setSelWp(null);
     const p = s.pos;
     setFollow(false);
-    chart.current?.fit(p ? [[w.lon, w.lat], [p.lon, p.lat]] : [[w.lon, w.lat]], 15);
+    chart.current?.fit(p ? [[target.lon, target.lat], [p.lon, p.lat]] : [[target.lon, target.lat]], 15);
   }
+  const delWp = async (w: Waypoint) => {
+    if (!confirmDelWp) { setConfirmDelWp(true); setTimeout(() => setConfirmDelWp(false), 3500); return; }
+    await deleteWaypoint(w.id).catch(() => {});
+    notifyNavData();
+    setSelWp(null); setConfirmDelWp(false);
+  };
 
   // ---------- Route planning ----------
   function startPlan(r?: Route) {
     setPlan(r ? { id: r.id, name: r.name, pts: r.points } : { name: t('route_default', { n: routes.length + 1 }), pts: [] });
-    setMode('plan'); setTab('routes'); setSelRoute(null); setFollow(false);
+    setMode('plan'); setTab('routes'); setSelRoute(null); setSel(null); setSelWp(null); setFollow(false);
     if (r) chart.current?.fit(r.points.map((p) => [p.lon, p.lat]));
     setToast(t('plan_hint'));
   }
@@ -183,20 +226,36 @@ export default function Navigate() {
     if (mode === 'plan') { addPlanPoint(lat, lon); return; }
     if (mode === 'addwp') return;
     const w = hitWp(lon, lat);
-    if (w) { setSelWp(w.id); setEditWp(w); } else setSelWp(null);
+    setConfirmDelWp(false);
+    if (w) { setSelWp(w); setSel(null); return; }
+    if (sel || selWp) { setSel(null); setSelWp(null); return; } // a tap elsewhere just closes the panel
+    setSel({ lat, lon });
   };
   const onLong = (lon: number, lat: number) => {
     if (mode === 'plan') { addPlanPoint(lat, lon); return; }
-    setEditWp(draftWp(lat, lon));
+    setSelWp(null); setSel({ lat, lon });
   };
 
   // ---------- Trip ----------
-  const onEnd = async () => {
-    if (!confirmEnd) { setConfirmEnd(true); setTimeout(() => setConfirmEnd(false), 3500); return; }
-    setConfirmEnd(false);
-    setDone(await endTrip());
+  const onStart = () => { if (!asked) allow(); startTrip(activity, t('trip_default', { activity: t(`act_${activity}`) })); };
+  const doEnd = async () => {
+    setEndAsk(false);
+    const track = s.track.slice();
+    const tr = await endTrip();
+    if (tr) setDone({ trip: tr, track });
   };
-  const onStart = () => startTrip(activity, t('trip_default', { activity: t(`act_${activity}`) }));
+  const toggleReturn = () => {
+    if (!start) { setToast(t('return_no_start')); return; }
+    const on = !s.returning;
+    setReturning(on);
+    if (on) { setFollow(true); setTab('nav'); }
+  };
+  const dropAnchor = (r: number) => {
+    const res = setAnchor(r);
+    if (res === 'nofix') setToast(t('em_no_fix'));
+    else if (res === 'poor') setToast(t('anchor_poor', { m: Math.round(pos?.acc ?? 0) }));
+    else setToast(t('anchor_on'));
+  };
 
   const onImport = async (f: File | undefined) => {
     if (!f) return;
@@ -207,95 +266,190 @@ export default function Navigate() {
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  const gpsChip = (() => {
-    const g = s.gps;
-    const cls = g === 'ok' ? 'bg-good text-white' : g === 'weak' || g === 'searching' ? 'bg-caution text-white' : 'bg-slate-500 text-white';
-    const label = g === 'ok' ? t('gps_ok') : g === 'weak' ? t('gps_weak') : g === 'searching' ? t('gps_searching') : g === 'denied' ? t('gps_denied') : g === 'unavailable' ? t('gps_unavail') : g === 'unsupported' ? t('gps_unsupported') : t('gps_off');
-    return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold shadow ${cls}`}><Satellite size={13} className={g === 'searching' ? 'animate-pulse' : ''} />{label}{pos && (g === 'ok' || g === 'weak') && <span className="opacity-80">{t('gps_acc', { m: Math.round(pos.acc) })}</span>}</span>;
-  })();
-
   const elapsed = trip ? Date.now() - trip.startedAt : 0;
-  const eta = (nm: number) => (pos?.speedKn && pos.speedKn > 1 ? tm(untilMsg(Date.now() + Math.max(60e3, (nm / pos.speedKn) * 3600e3), Date.now())) : null);
   const a = guide.active;
   const activeTarget = a && !a.arrived ? a.pts[a.leg] : null;
   const shownRoute = plan ? null : selRoute;
   const wpsByDist = useMemo(() => (pos ? [...wps].sort((x, y) => distanceNm(pos, x) - distanceNm(pos, y)) : wps), [wps, pos]);
+  const fromYou = (p: LL) => (fixOk ? t('from_you', { d: `${fmtDist(distanceNm(pos!, p))} ${distUnit(distanceNm(pos!, p))}`, b: pad3(bearing(pos!, p)) }) : null);
 
-  const mapBtn = 'tap grid h-11 w-11 place-items-center rounded-xl bg-white text-ink shadow-md ring-1 ring-black/5 dark:bg-[#0A2B40] dark:text-white';
+  const mapBtn = 'tap grid h-12 w-12 place-items-center rounded-xl bg-white text-ink shadow-md ring-1 ring-black/5 dark:bg-[#0A2B40] dark:text-white';
+  const showTripBar = mode === 'view';
 
   return (
     <AppShell title={t('nav_navigate')} showSpot={false} hideCaptain>
       <div className="-mx-4 md:mx-0 lg:grid lg:grid-cols-12 lg:gap-4">
         {/* ================= CHART ================= */}
         <div className="relative lg:sticky lg:top-4 lg:col-span-8 lg:self-start">
-          <ChartView ref={chart} layer={nav.layer} seamarks={nav.seamarks} initial={initialView} label={t('chart')}
-            className="h-[60vh] min-h-[340px] w-full md:rounded-3xl lg:h-[calc(100vh-8rem)]"
+          <ChartView ref={chart} layer={nav.layer} seamarks={nav.seamarks} initial={initialView} label={t('chart')} rotation={rotation}
+            className="h-[64vh] min-h-[380px] w-full md:rounded-3xl lg:h-[calc(100vh-8rem)]"
             onTap={onTap} onLongPress={onLong} onUserMove={() => setFollow(false)} doubleTapZoom={mode !== 'plan'}
             onViewChange={(v) => { viewRef.current = v; }}
             overlay={
               <>
+                {/* Status */}
                 <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2">
-                  <div className="flex flex-col items-start gap-1.5">
-                    {gpsChip}
-                    {trip && <span className="inline-flex items-center gap-1.5 rounded-full bg-bad px-2.5 py-1 text-[11px] font-bold text-white shadow"><span className="h-2 w-2 animate-pulse rounded-full bg-white" />{t('tracking')} · {fmtDuration(elapsed)}</span>}
-                    {guide.anchor && <span className="inline-flex items-center gap-1.5 rounded-full bg-abyss px-2.5 py-1 text-[11px] font-bold text-white shadow"><Anchor size={12} /> {pos ? `${Math.round(anchorDriftM(guide.anchor, pos))} m` : '—'} / {guide.anchor.radiusM} m</span>}
+                  <div className="flex min-w-0 flex-col items-start gap-1.5">
+                    <GpsBadge s={s} asked={asked} />
+                    {trip && <span className="inline-flex items-center gap-1.5 rounded-full bg-bad px-2.5 py-1 text-xs font-bold text-white shadow"><span className="h-2 w-2 animate-pulse rounded-full bg-white" />{t('tracking')} · {fmtDuration(elapsed)}</span>}
+                    {!online && <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-700 px-2.5 py-1 text-xs font-bold text-white shadow"><WifiOff size={13} /> {t('offline_mode')}</span>}
+                    {guide.anchor && <span className="inline-flex items-center gap-1.5 rounded-full bg-abyss px-2.5 py-1 text-xs font-bold text-white shadow"><Anchor size={12} /> {pos ? `${Math.round(anchorDriftM(guide.anchor, pos))} m` : '—'} / {guide.anchor.radiusM} m</span>}
                   </div>
-                  <button data-chart-ui onClick={() => setSos(true)} className="tap pointer-events-auto flex h-11 items-center gap-1.5 rounded-full bg-bad px-4 text-sm font-extrabold uppercase tracking-wide text-white shadow-lg ring-2 ring-white">
+                  <button data-chart-ui onClick={() => setSos(true)} className="tap pointer-events-auto flex h-12 shrink-0 items-center gap-1.5 rounded-full bg-bad px-4 text-sm font-extrabold uppercase tracking-wide text-white shadow-lg ring-2 ring-white">
                     <LifeBuoy size={18} /> {t('sos')}
                   </button>
                 </div>
-                {a && activeTarget && pos && mode === 'view' && (
-                  <button data-chart-ui onClick={() => setTab('nav')} className="absolute start-3 top-[5.5rem] flex max-w-[calc(100%-5rem)] items-center gap-2 rounded-2xl bg-[#C026D3] px-3 py-2 text-white shadow-lg">
-                    <Navigation size={16} className="shrink-0" style={{ transform: `rotate(${bearing(pos, activeTarget) - 45}deg)` }} />
-                    <span className="min-w-0 truncate text-sm font-semibold">{activeTarget.name || t('next_wp')}</span>
-                    <span className="shrink-0 font-display text-lg font-semibold tabular-nums">{fmtDist(distanceNm(pos, activeTarget))}<span className="text-xs"> {distUnit(distanceNm(pos, activeTarget))}</span></span>
-                    <span className="shrink-0 font-display text-lg font-semibold tabular-nums">{String(Math.round(bearing(pos, activeTarget))).padStart(3, '0')}°</span>
+
+                {/* Guidance strip: return to start / go-to / route */}
+                {mode === 'view' && ret && (
+                  <button data-chart-ui onClick={() => setTab('nav')} className="absolute inset-x-3 top-[6.5rem] flex items-center gap-3 rounded-2xl bg-buoy px-3 py-2 text-start text-white shadow-lg">
+                    <Navigation2 size={28} fill="#fff" className="shrink-0" style={{ transform: `rotate(${ret.steer - (rotation ?? 0)}deg)` }} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[11px] font-bold uppercase tracking-wider text-white/85"><House size={12} className="me-1 inline" />{t('return_title')}</span>
+                      <span className="block font-display text-xl font-semibold leading-tight tabular-nums">{fmtDist(ret.along)} {distUnit(ret.along)} · {pad3(ret.brgStart)}° · {sogForEta ? fh(ret.along / sogForEta) : t('eta_na')}</span>
+                    </span>
                   </button>
                 )}
-                <div data-chart-ui className="absolute bottom-8 end-3 flex flex-col gap-2">
-                  <button className={mapBtn} onClick={() => setLayersOpen(true)} aria-label={t('layers')} title={t('layers')}><Layers size={19} /></button>
-                  <button className={mapBtn} onClick={() => chart.current?.zoomBy(1)} aria-label={t('zoom_in')} title={t('zoom_in')}><Plus size={20} /></button>
-                  <button className={mapBtn} onClick={() => chart.current?.zoomBy(-1)} aria-label={t('zoom_out')} title={t('zoom_out')}><Minus size={20} /></button>
-                  <button className={`${mapBtn} ${follow && pos ? '!bg-[#0A84FF] !text-white' : ''}`} onClick={() => { if (!asked) allow(); setFollow(true); if (pos) chart.current?.setView({ lon: pos.lon, lat: pos.lat }); }} aria-label={t('follow')} title={t('follow')}><LocateFixed size={19} /></button>
+                {mode === 'view' && !ret && a && activeTarget && fixOk && (
+                  <button data-chart-ui onClick={() => setTab('nav')} className="absolute inset-x-3 top-[6.5rem] flex items-center gap-3 rounded-2xl bg-[#C026D3] px-3 py-2 text-start text-white shadow-lg">
+                    <Navigation2 size={28} fill="#fff" className="shrink-0" style={{ transform: `rotate(${bearing(pos!, activeTarget) - (rotation ?? 0)}deg)` }} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[11px] font-bold uppercase tracking-wider text-white/85"><Flag size={12} className="me-1 inline" />{activeTarget.name || t('destination')}</span>
+                      <span className="block font-display text-xl font-semibold leading-tight tabular-nums">{fmtDist(distanceNm(pos!, activeTarget))} {distUnit(distanceNm(pos!, activeTarget))} · {pad3(bearing(pos!, activeTarget))}° · {sogForEta ? fh(distanceNm(pos!, activeTarget) / sogForEta) : t('eta_na')}</span>
+                    </span>
+                  </button>
+                )}
+
+                {/* Map controls (right) */}
+                <div data-chart-ui className={`absolute end-3 flex flex-col gap-2 ${showTripBar ? 'bottom-[5.75rem]' : 'bottom-24'}`}>
+                  <button className={mapBtn} onClick={() => setLayersOpen(true)} aria-label={t('layers')} title={t('layers')}><Layers size={20} /></button>
+                  <button className={mapBtn} onClick={() => setNav({ orient: nav.orient === 'north' ? 'course' : 'north' })} aria-label={nav.orient === 'north' ? t('north_up') : t('course_up')} title={nav.orient === 'north' ? t('north_up') : t('course_up')}>
+                    <span className="relative grid place-items-center">
+                      <Navigation2 size={20} className={nav.orient === 'north' ? 'text-bad' : 'text-[#0A84FF]'} fill="currentColor" style={{ transform: `rotate(${-(rotation ?? 0)}deg)` }} />
+                      <span className="absolute -bottom-3 text-[9px] font-extrabold">{nav.orient === 'north' ? 'N' : 'C'}</span>
+                    </span>
+                  </button>
+                  <button className={mapBtn} onClick={() => chart.current?.zoomBy(1)} aria-label={t('zoom_in')} title={t('zoom_in')}><Plus size={22} /></button>
+                  <button className={mapBtn} onClick={() => chart.current?.zoomBy(-1)} aria-label={t('zoom_out')} title={t('zoom_out')}><Minus size={22} /></button>
                 </div>
+
+                {/* Recenter */}
+                {!follow && pos && mode === 'view' && (
+                  <button data-chart-ui onClick={() => { setFollow(true); chart.current?.setView({ lon: pos.lon, lat: pos.lat }); }}
+                    className={`tap absolute start-1/2 flex h-11 -translate-x-1/2 items-center gap-2 rounded-full bg-[#0A84FF] px-4 text-sm font-bold text-white shadow-lg rtl:translate-x-1/2 ${showTripBar ? (sel || selWp ? 'bottom-[13.5rem]' : 'bottom-[5.75rem]') : 'bottom-24'}`}>
+                    <LocateFixed size={18} /> {t('recenter')}
+                  </button>
+                )}
+
+                {/* Selected location / waypoint panel */}
+                {mode === 'view' && sel && (
+                  <div data-chart-ui className="absolute inset-x-3 bottom-[5.25rem] rounded-2xl bg-white/97 p-3 shadow-xl dark:bg-[#0A2B40]/97">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#C026D3]"><MapPin size={14} /> {t('sel_loc')}</p>
+                        <p dir="ltr" className="font-display text-lg font-semibold tabular-nums">{fmtLat(sel.lat)} {fmtLon(sel.lon)}</p>
+                        {fromYou(sel) && <p className="muted text-sm tabular-nums">{fromYou(sel)}</p>}
+                      </div>
+                      <button onClick={() => setSel(null)} aria-label={t('cancel')} className="tap grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-slate-100 dark:bg-white/10"><X size={18} /></button>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button onClick={() => { setEditWp(draftWp(sel.lat, sel.lon)); setSel(null); }} className="tap flex h-12 items-center justify-center gap-2 rounded-xl bg-abyss font-semibold text-white dark:bg-shallows dark:text-abyss"><MapPinPlus size={18} /> {t('add_wp')}</button>
+                      <button onClick={() => startGoto({ lat: sel.lat, lon: sel.lon, name: t('selected_pt') })} className="tap flex h-12 items-center justify-center gap-2 rounded-xl bg-[#C026D3] font-semibold text-white"><Navigation size={18} /> {t('nav_here')}</button>
+                    </div>
+                  </div>
+                )}
+                {mode === 'view' && selWp && (() => {
+                  const k = kindOf(selWp.kind);
+                  return (
+                    <div data-chart-ui className="absolute inset-x-3 bottom-[5.25rem] rounded-2xl bg-white/97 p-3 shadow-xl dark:bg-[#0A2B40]/97">
+                      <div className="flex items-start gap-3">
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-white" style={{ background: k.color }}><k.Icon size={20} /></span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-display text-xl font-semibold leading-tight">{selWp.name}</p>
+                          {fromYou(selWp) && <p className="text-sm font-semibold tabular-nums">{fromYou(selWp)}</p>}
+                          <p dir="ltr" className="muted text-xs tabular-nums">{fmtLat(selWp.lat)} {fmtLon(selWp.lon)}</p>
+                        </div>
+                        <button onClick={() => setSelWp(null)} aria-label={t('close')} className="tap grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-slate-100 dark:bg-white/10"><X size={18} /></button>
+                      </div>
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        <button onClick={() => startGoto({ lat: selWp.lat, lon: selWp.lon, name: selWp.name, wpId: selWp.id })} className="tap col-span-1 flex h-12 items-center justify-center gap-1.5 rounded-xl bg-[#C026D3] text-sm font-bold text-white"><Navigation size={16} /> {t('nav_here')}</button>
+                        <button onClick={() => { setEditWp(selWp); setSelWp(null); }} className="tap flex h-12 items-center justify-center gap-1.5 rounded-xl bg-slate-100 text-sm font-semibold dark:bg-white/10"><Pencil size={16} /> {t('edit')}</button>
+                        <button onClick={() => delWp(selWp)} aria-label={t('delete_wp')} className={`tap flex h-12 items-center justify-center gap-1.5 rounded-xl text-sm font-semibold ${confirmDelWp ? 'bg-bad text-white' : 'bg-bad/10 text-bad'}`}><Trash2 size={16} /> {confirmDelWp ? t('confirm_again') : t('delete')}</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Trip bar: the main actions, always within thumb reach */}
+                {showTripBar && (
+                  <div data-chart-ui className="absolute inset-x-3 bottom-7 flex items-stretch gap-2">
+                    {!trip ? (
+                      <>
+                        <button onClick={onStart} disabled={s.gps === 'denied' || s.gps === 'unsupported'}
+                          className="tap flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-good text-lg font-bold uppercase tracking-wide text-white shadow-lg disabled:opacity-50">
+                          <Play size={20} fill="#fff" /> {t('start_trip')}
+                        </button>
+                        <button onClick={markHere} disabled={!fixOk} aria-label={t('save_point')} className="tap flex h-14 w-16 flex-col items-center justify-center rounded-2xl bg-white text-[11px] font-bold text-ink shadow-lg disabled:opacity-50 dark:bg-[#0A2B40] dark:text-white">
+                          <MapPinPlus size={20} /> {t('mark_btn')}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={toggleReturn} className={`tap flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl text-lg font-bold uppercase tracking-wide shadow-lg ${s.returning ? 'bg-white text-buoy ring-2 ring-buoy dark:bg-[#0A2B40]' : 'bg-buoy text-white'} ${!start ? 'opacity-60' : ''}`}>
+                          {s.returning ? <><X size={20} /> {t('stop_return')}</> : <><House size={20} /> {t('return_btn')}</>}
+                        </button>
+                        <button onClick={markHere} disabled={!fixOk} aria-label={t('save_point')} className="tap flex h-14 w-16 flex-col items-center justify-center rounded-2xl bg-white text-[11px] font-bold text-ink shadow-lg disabled:opacity-50 dark:bg-[#0A2B40] dark:text-white">
+                          <MapPinPlus size={20} /> {t('mark_btn')}
+                        </button>
+                        <button onClick={() => setEndAsk(true)} aria-label={t('end_trip')} className="tap flex h-14 w-16 flex-col items-center justify-center rounded-2xl bg-white text-[11px] font-bold text-bad shadow-lg dark:bg-[#0A2B40]">
+                          <Square size={18} fill="currentColor" /> {t('end_trip').split(' ')[0]}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Mode bars */}
                 {mode === 'addwp' && (
                   <>
-                    <div className="pointer-events-none absolute inset-0 grid place-items-center"><Crosshair size={44} strokeWidth={1.5} className="text-[#C026D3] drop-shadow" /></div>
-                    <div data-chart-ui className="absolute bottom-8 start-3 end-[4.25rem] flex flex-wrap gap-2 rounded-2xl bg-white/95 p-2 shadow-xl dark:bg-[#0A2B40]/95">
-                      <button onClick={() => { const c = center(); setEditWp(draftWp(c.lat, c.lon)); setMode('view'); }} className="tap h-11 flex-1 rounded-xl bg-[#C026D3] px-3 text-sm font-bold text-white">{t('drop_here')}</button>
-                      {pos && <button onClick={() => { setEditWp(draftWp(pos.lat, pos.lon)); setMode('view'); }} className="tap h-11 rounded-xl bg-slate-100 px-3 text-sm font-semibold dark:bg-white/10">{t('at_boat')}</button>}
-                      <button onClick={() => setMode('view')} aria-label={t('cancel')} className="tap grid h-11 w-11 place-items-center rounded-xl bg-slate-100 dark:bg-white/10"><X size={18} /></button>
+                    <div className="pointer-events-none absolute inset-0 grid place-items-center"><Crosshair size={48} strokeWidth={1.5} className="text-[#C026D3] drop-shadow" /></div>
+                    <div data-chart-ui className="absolute bottom-7 start-3 end-[4.25rem] flex flex-wrap gap-2 rounded-2xl bg-white/95 p-2 shadow-xl dark:bg-[#0A2B40]/95">
+                      <button onClick={() => { const c = center(); setEditWp(draftWp(c.lat, c.lon)); setMode('view'); }} className="tap h-12 flex-1 rounded-xl bg-[#C026D3] px-3 text-sm font-bold text-white">{t('drop_here')}</button>
+                      {fixOk && <button onClick={() => { setEditWp(draftWp(pos!.lat, pos!.lon)); setMode('view'); }} className="tap h-12 rounded-xl bg-slate-100 px-3 text-sm font-semibold dark:bg-white/10">{t('at_boat')}</button>}
+                      <button onClick={() => setMode('view')} aria-label={t('cancel')} className="tap grid h-12 w-12 place-items-center rounded-xl bg-slate-100 dark:bg-white/10"><X size={18} /></button>
                     </div>
                   </>
                 )}
                 {mode === 'plan' && plan && (
-                  <div data-chart-ui className="absolute bottom-8 start-3 end-[4.25rem] flex items-center gap-2 rounded-2xl bg-white/95 p-2 shadow-xl dark:bg-[#0A2B40]/95">
+                  <div data-chart-ui className="absolute bottom-7 start-3 end-[4.25rem] flex items-center gap-2 rounded-2xl bg-white/95 p-2 shadow-xl dark:bg-[#0A2B40]/95">
                     <p className="min-w-0 flex-1 px-1 text-sm leading-tight">
                       <span className="block font-semibold">{t('plan_pts', { n: plan.pts.length })}</span>
                       <span className="muted tabular-nums">{fmtDist(pathNm(plan.pts))} {distUnit(pathNm(plan.pts))}</span>
                     </p>
-                    <button onClick={() => setPlan({ ...plan, pts: plan.pts.slice(0, -1) })} disabled={!plan.pts.length} aria-label={t('undo')} className="tap grid h-11 w-11 place-items-center rounded-xl bg-slate-100 disabled:opacity-40 dark:bg-white/10"><Undo2 size={18} /></button>
-                    <button onClick={savePlan} className="tap h-11 rounded-xl bg-[#C026D3] px-4 text-sm font-bold text-white">{t('save')}</button>
-                    <button onClick={cancelPlan} aria-label={t('cancel')} className="tap grid h-11 w-11 place-items-center rounded-xl bg-slate-100 dark:bg-white/10"><X size={18} /></button>
+                    <button onClick={() => setPlan({ ...plan, pts: plan.pts.slice(0, -1) })} disabled={!plan.pts.length} aria-label={t('undo')} className="tap grid h-12 w-12 place-items-center rounded-xl bg-slate-100 disabled:opacity-40 dark:bg-white/10"><Undo2 size={18} /></button>
+                    <button onClick={savePlan} className="tap h-12 rounded-xl bg-[#C026D3] px-4 text-sm font-bold text-white">{t('save')}</button>
+                    <button onClick={cancelPlan} aria-label={t('cancel')} className="tap grid h-12 w-12 place-items-center rounded-xl bg-slate-100 dark:bg-white/10"><X size={18} /></button>
                   </div>
                 )}
-                {toast && <p className="pointer-events-none absolute inset-x-0 top-1/3 mx-auto w-max max-w-[85%] rounded-2xl bg-abyss/95 px-4 py-2 text-center text-sm font-semibold text-white shadow-lg"><Check size={14} className="me-1 inline" />{toast}</p>}
+                {toast && <p role="status" className="pointer-events-none absolute inset-x-0 top-1/3 mx-auto w-max max-w-[85%] rounded-2xl bg-abyss/95 px-4 py-2 text-center text-sm font-semibold text-white shadow-lg"><Check size={14} className="me-1 inline" />{toast}</p>}
               </>
             }>
             {(p, v) => {
               const mpp = mPerPx(v);
               return (
                 <g>
-                  <TrackLine pts={s.track} p={p} />
+                  <TrackLine pts={s.track} p={p} color={trip ? '#E11D48' : '#0E7C86'} />
                   {ret && <DashLine pts={ret.path} p={p} />}
-                  {shownRoute && <RouteLine pts={shownRoute.points} p={p} z={v.z} />}
-                  {a && a.kind === 'route' && <RouteLine pts={a.pts} p={p} active={a.arrived ? -1 : a.leg} z={v.z} />}
-                  {plan && <RouteLine pts={plan.pts} p={p} z={v.z} dashed />}
-                  {guide.anchor && <AnchorCircle an={guide.anchor} p={p} mpp={mpp} drifted={!!pos && anchorDriftM(guide.anchor, pos) > guide.anchor.radiusM} />}
-                  <WaypointMarkers wps={wps} p={p} selected={selWp} z={v.z} />
-                  {start && <StartMarker at={start} p={p} />}
-                  {pos && activeTarget && <BearingLine from={pos} to={activeTarget} p={p} />}
-                  {pos && <BoatMarker pos={pos} p={p} mpp={mpp} />}
+                  {shownRoute && <RouteLine pts={shownRoute.points} p={p} z={v.z} rot={v.rot} />}
+                  {a && a.kind === 'route' && <RouteLine pts={a.pts} p={p} active={a.arrived ? -1 : a.leg} z={v.z} rot={v.rot} />}
+                  {plan && <RouteLine pts={plan.pts} p={p} z={v.z} dashed rot={v.rot} />}
+                  {guide.anchor && <AnchorCircle an={guide.anchor} p={p} mpp={mpp} drifted={!!pos && anchorDriftM(guide.anchor, pos) - pos.acc * 0.5 > guide.anchor.radiusM} />}
+                  <WaypointMarkers wps={wps} p={p} selected={selWp?.id} z={v.z} rot={v.rot} />
+                  {start && <StartMarker at={start} p={p} rot={v.rot} />}
+                  {fixOk && activeTarget && !ret && <BearingLine from={pos!} to={activeTarget} p={p} />}
+                  {fixOk && ret && start && <BearingLine from={pos!} to={start} p={p} />}
+                  {sel && <SelectedMarker at={sel} p={p} />}
+                  {pos && <g opacity={s.gps === 'lost' ? 0.45 : 1}><BoatMarker pos={pos} p={p} mpp={mpp} /></g>}
                 </g>
               );
             }}
@@ -316,82 +470,67 @@ export default function Navigate() {
           {/* ---------- NAV TAB ---------- */}
           {tab === 'nav' && (
             <>
+              {s.storageError && <Warn tone="bad">{t('storage_err')}</Warn>}
               {!asked && (
                 <section className="card p-4">
-                  <p className="flex items-center gap-2 font-semibold"><LocateFixed size={18} className="text-lagoon" /> {t('perm_title')}</p>
+                  <p className="flex items-center gap-2 text-lg font-bold"><LocateFixed size={20} className="text-lagoon" /> {t('loc_required')}</p>
                   <p className="muted mt-1 text-sm leading-snug">{t('perm_t')}</p>
-                  <button onClick={allow} className="tap mt-3 h-12 w-full rounded-2xl bg-abyss font-semibold text-white">{t('perm_btn')}</button>
+                  <button onClick={allow} className="tap mt-3 h-14 w-full rounded-2xl bg-abyss text-lg font-bold text-white">{t('perm_btn')}</button>
                 </section>
               )}
               {asked && (s.gps === 'denied' || s.gps === 'unavailable' || s.gps === 'unsupported') && (
                 <section className="card border-caution/40 p-4">
                   <p className="font-semibold">{s.gps === 'denied' ? t('gps_denied') : s.gps === 'unavailable' ? t('gps_unavail') : t('gps_unsupported')}</p>
                   <p className="muted mt-1 text-sm">{s.gps === 'denied' ? t('gps_denied_t') : t('gps_unavail_t')}</p>
-                  {s.gps !== 'unsupported' && <button onClick={() => { releaseGps(); startGps(); }} className="tap mt-3 inline-flex items-center gap-1.5 rounded-full bg-abyss px-4 py-2 text-sm font-semibold text-white"><RefreshCw size={14} /> {t('try_again')}</button>}
+                  {s.gps !== 'unsupported' && <button onClick={() => { releaseGps(); startGps(); }} className="tap mt-3 inline-flex h-11 items-center gap-1.5 rounded-full bg-abyss px-4 text-sm font-semibold text-white"><RefreshCw size={14} /> {t('try_again')}</button>}
                 </section>
               )}
               {asked && s.gps === 'searching' && !pos && (
                 <section className="card flex items-center gap-3 p-4">
                   <span className="relative grid h-10 w-10 place-items-center"><span className="absolute inset-0 animate-ping rounded-full bg-caution/30" /><Satellite size={20} className="text-caution" /></span>
-                  <span><span className="block font-semibold">{t('gps_searching')}</span><span className="muted text-sm">{t('gps_searching_t')}</span></span>
+                  <span><span className="block font-semibold">{t('gps_search_big')}</span><span className="muted text-sm">{t('gps_searching_t')}</span></span>
                 </section>
               )}
-              {s.resumed && trip && <p className="rounded-xl bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:bg-sky-400/10 dark:text-sky-200">{t('trip_resumed')}</p>}
-
-              {a && <GuidanceCard a={a} pos={pos} />}
-              {guide.anchor && <AnchorCard an={guide.anchor} pos={pos} />}
+              {s.gps === 'lost' && s.lastFixAt && <Warn tone="bad">{t('gps_lost')} · {t('gps_lost_t', { t: ago(Date.now() - s.lastFixAt) })}</Warn>}
+              {!online && <Warn tone="info"><WifiOff size={14} className="me-1 inline" />{t('offline_nav_t')}</Warn>}
+              {s.resumed && trip && <Warn tone="info">{t('trip_resumed')}</Warn>}
 
               {ret && (
                 <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#7A2E0E] to-buoy text-white shadow-lg">
                   <div className="flex items-center gap-4 p-4">
                     <div className="relative grid h-20 w-20 shrink-0 place-items-center rounded-full bg-white/15 ring-2 ring-white/30">
-                      <Navigation size={36} fill="#fff" style={{ transform: `rotate(${ret.steer - (pos?.cog ?? 0) - 45}deg)` }} />
+                      <Navigation2 size={40} fill="#fff" style={{ transform: `rotate(${ret.steer - (pos?.cog != null && moving ? pos.cog : 0)}deg)` }} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">{t('along_track')}</p>
-                      <p className="readout text-[40px]"><bdi>{fmtDist(ret.along)}</bdi><span className="ms-1 font-sans text-base font-medium text-white/70">{distUnit(ret.along)}</span></p>
-                      <p className="text-sm text-white/85">{t('eta')}: <b>{eta(ret.along) ?? t('eta_na')}</b></p>
-                      <p className="text-xs text-white/70">{t('to_start')} {fmtDist(ret.direct)} {distUnit(ret.direct)} · {t('bearing')} {Math.round(ret.brgStart)}°</p>
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-white/80"><House size={13} className="me-1 inline" />{t('return_title')}</p>
+                      <p className="readout text-[40px] leading-none"><bdi>{fmtDist(ret.along)}</bdi><span className="ms-1 font-sans text-base font-medium text-white/70">{distUnit(ret.along)}</span></p>
+                      <p className="mt-1 text-sm text-white/90">{t('bearing')} <b className="tabular-nums">{pad3(ret.brgStart)}°</b> · {t('eta')} <b>{sogForEta ? fh(ret.along / sogForEta) : t('eta_na')}</b></p>
+                      <p className="text-xs text-white/75">{t('to_start')} {fmtDist(ret.direct)} {distUnit(ret.direct)}</p>
                     </div>
                   </div>
-                  <p className="bg-black/20 px-4 py-2 text-xs leading-snug text-white/85">{t('follow_track')}</p>
+                  <p className="bg-black/20 px-4 py-2 text-xs leading-snug text-white/90">{t('return_follow')}</p>
                 </section>
               )}
+              {trip && !start && <Warn tone="info"><Flag size={13} className="me-1 inline" />{t('return_no_start')}</Warn>}
+              {a && <GuidanceCard a={a} pos={fixOk ? pos : null} />}
+              {guide.anchor && <AnchorCard an={guide.anchor} pos={fixOk ? pos : null} />}
 
               <section className="grid grid-cols-2 gap-2">
-                <Inst label={t('speed')} value={pos?.speedKn != null ? pos.speedKn.toFixed(1) : '0.0'} unit={t('unit_kn')} big />
-                <Inst label={t('cog')} value={pos?.cog != null ? `${String(Math.round(pos.cog)).padStart(3, '0')}°` : '—'} unit="" big />
+                <Inst label={t('speed')} value={fixOk && pos!.speedKn != null ? pos!.speedKn.toFixed(1) : '—'} unit={fixOk ? t('unit_kn') : ''} big />
+                <Inst label={t('cog_gps')} value={!fixOk ? '—' : moving ? `${pad3(pos!.cog!)}°` : t('cog_still')} unit="" big small={fixOk && !moving} />
                 <Inst label={t('distance')} value={trip ? fmtDist(trip.distanceNm) : '0.00'} unit={trip ? distUnit(trip.distanceNm) : 'NM'} />
                 <Inst label={t('elapsed')} value={trip ? fmtDuration(elapsed) : '0:00'} unit="" />
               </section>
               <section className="card flex items-center justify-between gap-3 px-4 py-3">
                 <span className="eyebrow">{t('position')}</span>
-                {pos ? <span dir="ltr" className="font-display text-lg font-semibold tabular-nums">{fmtLat(pos.lat)}  {fmtLon(pos.lon)}</span> : <span className="muted text-sm">{t('em_no_fix')}</span>}
+                {pos ? <span dir="ltr" className={`font-display text-lg font-semibold tabular-nums ${s.gps === 'lost' ? 'opacity-50' : ''}`}>{fmtLat(pos.lat)}  {fmtLon(pos.lon)}</span> : <span className="muted text-sm">{t('em_no_fix')}</span>}
               </section>
-
-              {!trip ? (
-                <button onClick={onStart} disabled={!asked || s.gps === 'denied' || s.gps === 'unsupported'}
-                  className="tap flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-good text-lg font-bold uppercase tracking-wide text-white shadow-lg disabled:opacity-40">
-                  <Play size={20} fill="#fff" /> {t('start_trip')}
-                </button>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => setReturning(!s.returning)} disabled={!start}
-                    className={`tap col-span-2 flex h-14 items-center justify-center gap-2 rounded-2xl text-lg font-bold uppercase tracking-wide shadow-lg disabled:opacity-40 ${s.returning ? 'bg-white text-buoy ring-2 ring-buoy dark:bg-transparent' : 'bg-buoy text-white'}`}>
-                    {s.returning ? <><X size={20} /> {t('stop_return')}</> : <><Undo2 size={20} /> {t('return_start')}</>}
-                  </button>
-                  <button onClick={quickSave} disabled={!pos} className="tap flex h-12 items-center justify-center gap-2 rounded-2xl bg-slate-100 font-semibold disabled:opacity-40 dark:bg-white/10"><MapPinPlus size={19} /> {t('save_point')}</button>
-                  <button onClick={onEnd} className={`tap flex h-12 items-center justify-center gap-2 rounded-2xl font-semibold ${confirmEnd ? 'bg-bad text-white' : 'bg-slate-100 text-bad dark:bg-white/10'}`}>
-                    <Square size={16} fill="currentColor" /> {confirmEnd ? t('end_confirm') : t('end_trip')}
-                  </button>
-                </div>
-              )}
-              {trip && !start && <p className="muted text-center text-xs"><Flag size={12} className="me-1 inline" />{t('no_start')}</p>}
+              {trip && <p className="muted rounded-xl bg-slate-100 px-3 py-2 text-xs leading-snug dark:bg-white/5">{t('bg_warn')}</p>}
 
               <div className="grid grid-cols-3 gap-2">
-                <QuickBtn icon={<MapPinPlus size={20} />} label={t('add_wp')} onClick={() => { setMode('addwp'); setFollow(false); }} />
+                <QuickBtn icon={<MapPinPlus size={20} />} label={t('add_wp')} onClick={() => { setMode('addwp'); setFollow(false); setSel(null); setSelWp(null); }} />
                 <QuickBtn icon={<RouteIcon size={20} />} label={t('plan_route')} onClick={() => startPlan()} />
-                <QuickBtn icon={<Anchor size={20} />} label={guide.anchor ? t('anchor_on') : t('anchor_set')} onClick={() => { if (guide.anchor) { setTab('tools'); return; } if (!setAnchor(50)) setToast(t('em_no_fix')); }} />
+                <QuickBtn icon={<Anchor size={20} />} label={guide.anchor ? t('anchor_on') : t('anchor_drop')} onClick={() => { if (guide.anchor) { setTab('tools'); return; } dropAnchor(20); }} />
               </div>
               <p className="muted text-center text-xs">{t('long_press_hint')}</p>
             </>
@@ -401,24 +540,24 @@ export default function Navigate() {
           {tab === 'marks' && (
             <>
               <div className="flex gap-2">
-                <button onClick={() => { setMode('addwp'); setFollow(false); }} className="tap flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#C026D3] font-semibold text-white"><MapPinPlus size={18} /> {t('add_wp')}</button>
-                <button onClick={quickSave} disabled={!pos} className="tap flex h-12 items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 font-semibold disabled:opacity-40 dark:bg-white/10"><LocateFixed size={18} /> {t('at_boat')}</button>
+                <button onClick={() => { setMode('addwp'); setFollow(false); setSel(null); setSelWp(null); }} className="tap flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#C026D3] font-semibold text-white"><MapPinPlus size={18} /> {t('add_wp')}</button>
+                <button onClick={markHere} disabled={!fixOk} className="tap flex h-12 items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 font-semibold disabled:opacity-40 dark:bg-white/10"><LocateFixed size={18} /> {t('at_boat')}</button>
               </div>
               {wps.length === 0 ? <p className="card muted p-4 text-sm">{t('no_wps')}</p> : (
                 <ul className="card divide-y divide-slate-100 overflow-hidden dark:divide-white/10">
                   {wpsByDist.map((w) => {
-                    const k = kindOf(w.kind), d = pos ? distanceNm(pos, w) : null;
+                    const k = kindOf(w.kind);
                     return (
-                      <li key={w.id} className={`flex items-center gap-2 px-3 py-2.5 ${selWp === w.id ? 'bg-lagoon/5' : ''}`}>
-                        <button onClick={() => { setSelWp(w.id); setFollow(false); chart.current?.setView({ lon: w.lon, lat: w.lat, z: Math.max(13, viewRef.current?.z ?? 13) }); }} className="flex min-w-0 flex-1 items-center gap-3 text-start">
+                      <li key={w.id} className={`flex items-center gap-2 px-3 py-2.5 ${selWp?.id === w.id ? 'bg-lagoon/5' : ''}`}>
+                        <button onClick={() => { setSelWp(w); setSel(null); setFollow(false); chart.current?.setView({ lon: w.lon, lat: w.lat, z: Math.max(13, viewRef.current?.z ?? 13) }); }} className="flex min-w-0 flex-1 items-center gap-3 text-start">
                           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-white" style={{ background: k.color }}><k.Icon size={18} /></span>
                           <span className="min-w-0">
                             <span className="block truncate font-semibold">{w.name}</span>
-                            <span className="muted block text-xs tabular-nums">{d != null && pos ? `${fmtDist(d)} ${distUnit(d)} · ${String(Math.round(bearing(pos, w))).padStart(3, '0')}°` : <bdi dir="ltr">{fmtLat(w.lat)} {fmtLon(w.lon)}</bdi>}</span>
+                            <span className="muted block text-xs tabular-nums">{fromYou(w) ?? <bdi dir="ltr">{fmtLat(w.lat)} {fmtLon(w.lon)}</bdi>}</span>
                           </span>
                         </button>
-                        <button onClick={() => setEditWp(w)} className="tap h-9 shrink-0 rounded-full bg-slate-100 px-3 text-xs font-semibold dark:bg-white/10">{t('edit')}</button>
-                        <button onClick={() => startGoto(w)} className="tap flex h-9 shrink-0 items-center gap-1 rounded-full bg-[#C026D3] px-3 text-xs font-bold text-white"><Navigation size={13} /> {t('go')}</button>
+                        <button onClick={() => setEditWp(w)} className="tap h-10 shrink-0 rounded-full bg-slate-100 px-3 text-xs font-semibold dark:bg-white/10">{t('edit')}</button>
+                        <button onClick={() => startGoto({ lat: w.lat, lon: w.lon, name: w.name, wpId: w.id })} className="tap flex h-10 shrink-0 items-center gap-1 rounded-full bg-[#C026D3] px-3 text-xs font-bold text-white"><Navigation size={13} /> {t('go')}</button>
                       </li>
                     );
                   })}
@@ -435,7 +574,7 @@ export default function Navigate() {
                 <input value={plan.name} onChange={(e) => setPlan({ ...plan, name: e.target.value })} aria-label={t('route_name')} maxLength={50}
                   className="h-12 w-full rounded-xl border-0 bg-slate-100 px-3 font-display text-xl font-semibold dark:bg-white/10" />
                 <p className="muted text-sm">{t('plan_hint')}</p>
-                {pos && <button onClick={() => setPlan({ ...plan, pts: [...plan.pts, { lat: pos.lat, lon: pos.lon, name: t('my_position') }] })} className="tap inline-flex h-10 items-center gap-1.5 rounded-full bg-slate-100 px-3.5 text-sm font-semibold dark:bg-white/10"><LocateFixed size={15} /> {t('add_boat_pt')}</button>}
+                {fixOk && <button onClick={() => setPlan({ ...plan, pts: [...plan.pts, { lat: pos!.lat, lon: pos!.lon, name: t('my_position') }] })} className="tap inline-flex h-11 items-center gap-1.5 rounded-full bg-slate-100 px-3.5 text-sm font-semibold dark:bg-white/10"><LocateFixed size={15} /> {t('add_boat_pt')}</button>}
                 {plan.pts.length > 0 && <RouteTotals pts={plan.pts} />}
                 {plan.pts.length > 0 && <LegsTable pts={plan.pts} onRemove={(i) => setPlan({ ...plan, pts: plan.pts.filter((_, k) => k !== i) })} />}
                 <div className="grid grid-cols-2 gap-2">
@@ -450,7 +589,7 @@ export default function Navigate() {
                   <ul className="space-y-2">
                     {routes.map((r) => {
                       const nm = pathNm(r.points);
-                      const startD = pos ? distanceNm(pos, r.points[0]) : null;
+                      const startD = fixOk ? distanceNm(pos!, r.points[0]) : null;
                       return (
                         <li key={r.id} className={`card flex items-center gap-3 p-3 ${selRoute?.id === r.id ? 'ring-2 ring-[#C026D3]' : ''}`}>
                           <button onClick={() => { setSelRoute(r); setFollow(false); chart.current?.fit(r.points.map((q) => [q.lon, q.lat])); }} className="flex min-w-0 flex-1 items-center gap-3 text-start">
@@ -460,7 +599,7 @@ export default function Navigate() {
                               <span className="muted block text-xs tabular-nums">{t('n_points', { n: r.points.length })} · {fmtDist(nm)} {distUnit(nm)}{startD != null ? ` · ${t('start_away', { d: `${fmtDist(startD)} ${distUnit(startD)}` })}` : ''}</span>
                             </span>
                           </button>
-                          <button onClick={() => navigateRoute(r, r.points)} className="tap flex h-9 shrink-0 items-center gap-1 rounded-full bg-[#C026D3] px-3 text-xs font-bold text-white"><Navigation size={13} /> {t('go')}</button>
+                          <button onClick={() => navigateRoute(r, r.points)} className="tap flex h-10 shrink-0 items-center gap-1 rounded-full bg-[#C026D3] px-3 text-xs font-bold text-white"><Navigation size={13} /> {t('go')}</button>
                         </li>
                       );
                     })}
@@ -476,10 +615,10 @@ export default function Navigate() {
               <section className="card p-4">
                 <p className="flex items-center gap-2 font-semibold"><Anchor size={18} /> {t('anchor_alarm')}</p>
                 <p className="muted mt-1 text-sm">{t('anchor_t')}</p>
-                {guide.anchor ? <div className="mt-3"><AnchorCard an={guide.anchor} pos={pos} /></div> : (
+                {guide.anchor ? <div className="mt-3"><AnchorCard an={guide.anchor} pos={fixOk ? pos : null} /></div> : (
                   <div className="mt-3 flex gap-1.5">
-                    {[25, 50, 100, 200].map((r) => (
-                      <button key={r} disabled={!pos} onClick={() => { setAnchor(r); setToast(t('anchor_on')); }} className="tap h-11 flex-1 rounded-xl bg-abyss text-sm font-semibold text-white disabled:opacity-40 dark:bg-shallows dark:text-abyss">{r} m</button>
+                    {[10, 20, 30, 50].map((r) => (
+                      <button key={r} disabled={!fixOk} onClick={() => dropAnchor(r)} className="tap h-12 flex-1 rounded-xl bg-abyss text-sm font-semibold text-white disabled:opacity-40 dark:bg-shallows dark:text-abyss">{r} m</button>
                     ))}
                   </div>
                 )}
@@ -493,8 +632,8 @@ export default function Navigate() {
                   <Seg value={nav.xteNm} options={[0.05, 0.1, 0.25, 0.5]} fmt={(v) => `${v}`} onChange={(v) => setNav({ xteNm: v })} />
                 </Row>
                 <Row label={t('alarm_sound')}>
-                  <button role="switch" aria-checked={nav.sound} aria-label={t('alarm_sound')} onClick={() => setNav({ sound: !nav.sound })} className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${nav.sound ? 'bg-good' : 'bg-slate-300 dark:bg-white/20'}`}>
-                    <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${nav.sound ? 'start-[22px]' : 'start-0.5'}`} />
+                  <button role="switch" aria-checked={nav.sound} aria-label={t('alarm_sound')} onClick={() => setNav({ sound: !nav.sound })} className={`relative h-8 w-14 shrink-0 rounded-full transition-colors ${nav.sound ? 'bg-good' : 'bg-slate-300 dark:bg-white/20'}`}>
+                    <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${nav.sound ? 'start-7' : 'start-1'}`} />
                   </button>
                 </Row>
               </section>
@@ -502,11 +641,12 @@ export default function Navigate() {
                 <p className="font-semibold">{t('gpx_title')}</p>
                 <p className="muted mt-1 text-sm">{t('gpx_t')}</p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button onClick={() => fileRef.current?.click()} className="tap flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-semibold dark:bg-white/10"><Upload size={16} /> {t('import_gpx')}</button>
-                  <button onClick={() => exportAllGpx().catch(() => {})} className="tap flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-semibold dark:bg-white/10"><Download size={16} /> {t('export_gpx')}</button>
+                  <button onClick={() => fileRef.current?.click()} className="tap flex h-12 items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-semibold dark:bg-white/10"><Upload size={16} /> {t('import_gpx')}</button>
+                  <button onClick={() => exportAllGpx().catch(() => {})} className="tap flex h-12 items-center justify-center gap-2 rounded-xl bg-slate-100 text-sm font-semibold dark:bg-white/10"><Download size={16} /> {t('export_gpx')}</button>
                 </div>
                 <input ref={fileRef} type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" className="hidden" onChange={(e) => onImport(e.target.files?.[0])} />
               </section>
+              {s.rejected > 0 && <p className="muted px-1 text-xs">{t('gps_jumps', { n: s.rejected })}</p>}
               <p className="rounded-xl bg-slate-100 px-3 py-2.5 text-xs leading-relaxed text-slate-600 dark:bg-white/5 dark:text-slate-300">{t('nav_aid')} {t('chart_note')}</p>
             </>
           )}
@@ -514,31 +654,67 @@ export default function Navigate() {
       </div>
 
       {layersOpen && <LayerSheet layer={nav.layer} seamarks={nav.seamarks} onClose={() => setLayersOpen(false)} onChange={(p) => setNav(p)} />}
-      {editWp && <WaypointSheet wp={editWp} pos={pos} onClose={() => setEditWp(null)} onGoTo={startGoto} onSaved={(w) => setSelWp(w?.id ?? null)} />}
+      {editWp && <WaypointSheet wp={editWp} pos={fixOk ? pos : null} onClose={() => setEditWp(null)} onGoTo={(w) => startGoto({ lat: w.lat, lon: w.lon, name: w.name, wpId: w.id })} />}
       {shownRoute && tab === 'routes' && (
         <Sheet title={t('route')} onClose={() => setSelRoute(null)} wide>
           <RouteDetail route={shownRoute} onNavigate={(pts) => navigateRoute(shownRoute, pts)} onEdit={() => startPlan(shownRoute)}
             onDeleted={() => setSelRoute(null)} onRenamed={(r) => setSelRoute(r)} />
         </Sheet>
       )}
-      <EmergencySheet open={sos} onClose={() => setSos(false)} pos={pos} canReturn={!!trip && !!start} onReturn={() => setReturning(true)} onSave={quickSave} />
-      {done && <TripDone trip={done} onClose={() => setDone(null)} onOpen={() => router.push(`/trips?trip=${done.id}`)} />}
+      {endAsk && trip && (
+        <Sheet title={t('end_title')} onClose={() => setEndAsk(false)}>
+          <p className="text-base">{t('end_t')}</p>
+          <p className="muted mt-1 text-sm tabular-nums">{fmtDist(trip.distanceNm)} {distUnit(trip.distanceNm)} · {fmtDuration(elapsed)}</p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button onClick={doEnd} className="tap h-14 rounded-2xl bg-bad text-lg font-bold text-white">{t('end_save')}</button>
+            <button onClick={() => setEndAsk(false)} className="tap h-14 rounded-2xl bg-slate-100 text-lg font-semibold dark:bg-white/10">{t('cancel')}</button>
+          </div>
+        </Sheet>
+      )}
+      <EmergencySheet open={sos} onClose={() => setSos(false)} pos={pos} canReturn={!!trip && !!start} onReturn={() => { if (start) { setReturning(true); setFollow(true); } }} onSave={markHere} />
+      {done && <TripDone trip={done.trip} track={done.track} onClose={() => setDone(null)} onOpen={() => router.push(`/trips?trip=${done.trip.id}`)} />}
     </AppShell>
   );
 }
 
-function Inst({ label, value, unit, big }: { label: string; value: string; unit: string; big?: boolean }) {
+function GpsBadge({ s, asked }: { s: TrackerState; asked: boolean }) {
+  const { t } = useT();
+  const g = s.gps;
+  if (!asked || g === 'off') return <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-600 px-2.5 py-1 text-xs font-bold text-white shadow"><Satellite size={13} /> {t('loc_required')}</span>;
+  const map: Record<string, [string, string, string]> = {
+    searching: ['bg-caution', t('gps_search_big'), ''],
+    ok: ['bg-good', t('gps_ok'), s.pos ? t('acc_label', { m: Math.round(s.pos.acc) }) : ''],
+    weak: ['bg-caution', t('gps_low'), s.pos ? t('acc_label', { m: Math.round(s.pos.acc) }) : ''],
+    lost: ['bg-bad', t('gps_lost'), s.lastFixAt ? t('gps_lost_t', { t: ago(Date.now() - s.lastFixAt) }) : ''],
+    denied: ['bg-bad', t('gps_denied'), ''],
+    unavailable: ['bg-bad', t('gps_unavail'), ''],
+    unsupported: ['bg-bad', t('gps_unsupported'), ''],
+  };
+  const [cls, label, sub] = map[g] ?? map.searching;
+  return (
+    <span role="status" className={`inline-flex max-w-[15rem] items-center gap-1.5 rounded-2xl px-2.5 py-1 text-xs font-bold text-white shadow ${cls}`}>
+      {g === 'lost' || g === 'denied' ? <TriangleAlert size={14} className="shrink-0" /> : <Satellite size={14} className={`shrink-0 ${g === 'searching' ? 'animate-pulse' : ''}`} />}
+      <span className="min-w-0 leading-tight"><span className="block">{label}</span>{sub && <span className="block text-[11px] font-semibold opacity-90">{sub}</span>}</span>
+    </span>
+  );
+}
+
+function Warn({ children, tone }: { children: React.ReactNode; tone: 'bad' | 'info' }) {
+  return <p role={tone === 'bad' ? 'alert' : undefined} className={`rounded-xl px-3 py-2.5 text-sm font-medium leading-snug ${tone === 'bad' ? 'bg-bad/10 text-bad' : 'bg-sky-50 text-sky-900 dark:bg-sky-400/10 dark:text-sky-100'}`}>{children}</p>;
+}
+
+function Inst({ label, value, unit, big, small }: { label: string; value: string; unit: string; big?: boolean; small?: boolean }) {
   return (
     <div className="card px-4 py-3">
       <p className="eyebrow">{label}</p>
-      <p className={`readout mt-1 ${big ? 'text-[42px]' : 'text-[30px]'}`}><bdi>{value}</bdi>{unit && <span className="ms-1 font-sans text-sm font-medium text-slate-400">{unit}</span>}</p>
+      <p className={`readout mt-1 ${small ? 'text-2xl' : big ? 'text-[44px]' : 'text-[32px]'}`}><bdi>{value}</bdi>{unit && <span className="ms-1 font-sans text-sm font-medium text-slate-400">{unit}</span>}</p>
     </div>
   );
 }
 
 function QuickBtn({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="card tap flex flex-col items-center gap-1.5 p-3 text-center text-xs font-semibold">
+    <button onClick={onClick} className="card tap flex min-h-[84px] flex-col items-center justify-center gap-1.5 p-3 text-center text-xs font-semibold">
       <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#C026D3]/10 text-[#C026D3]">{icon}</span>{label}
     </button>
   );
@@ -553,7 +729,7 @@ function Seg({ value, options, fmt, onChange }: { value: number; options: number
     <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-white/10">
       {options.map((o) => (
         <button key={o} onClick={() => onChange(o)} aria-pressed={value === o}
-          className={`tap h-8 rounded-lg px-2 text-xs font-semibold tabular-nums ${value === o ? 'bg-white text-ink shadow-sm dark:bg-[#0A2B40] dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>{fmt(o)}</button>
+          className={`tap h-9 rounded-lg px-2 text-xs font-semibold tabular-nums ${value === o ? 'bg-white text-ink shadow-sm dark:bg-[#0A2B40] dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>{fmt(o)}</button>
       ))}
     </div>
   );
@@ -588,14 +764,15 @@ function LayerSheet({ layer, seamarks, onChange, onClose }: { layer: MapLayer; s
   );
 }
 
-function TripDone({ trip, onClose, onOpen }: { trip: Trip; onClose: () => void; onOpen: () => void }) {
+function TripDone({ trip, track, onClose, onOpen }: { trip: Trip; track: [number, number][]; onClose: () => void; onOpen: () => void }) {
   const { t } = useT();
   const [name, setName] = useState(trip.name);
   const [confirmDel, setConfirmDel] = useState(false);
-  const saveIt = async () => { await putTrip({ ...trip, name: name.trim() || trip.name }).catch(() => {}); onOpen(); };
+  const saveIt = async () => { await putTrip({ ...trip, name: name.trim() || trip.name }).catch(() => {}); notifyNavData(); onOpen(); };
   const del = async () => {
     if (!confirmDel) { setConfirmDel(true); return; }
     await deleteTrip(trip.id).catch(() => {});
+    notifyNavData();
     onClose();
   };
   return (
@@ -603,7 +780,8 @@ function TripDone({ trip, onClose, onOpen }: { trip: Trip; onClose: () => void; 
       <div className="absolute inset-0 bg-abyss/60" />
       <div className="animate-rise relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-5 pb-safe shadow-2xl dark:bg-[#0A2B40] md:rounded-3xl">
         <p className="flex items-center gap-2 text-good"><Check size={20} /><span className="font-display text-3xl font-bold uppercase text-ink dark:text-white">{t('trip_complete')}</span></p>
-        <div className="mt-4"><TripStats trip={trip} /></div>
+        {track.length > 1 && <div className="mt-3 overflow-hidden rounded-2xl"><MiniChart track={track} start={trip.start} className="h-48 w-full" /></div>}
+        <div className="mt-3"><TripStats trip={trip} /></div>
         <label className="mt-4 block text-sm font-medium">{t('trip_name')}
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} className="mt-1 h-12 w-full rounded-xl border-0 bg-slate-100 px-3 text-base dark:bg-white/10" />
         </label>

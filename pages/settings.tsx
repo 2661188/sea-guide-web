@@ -12,7 +12,7 @@ import { spotName, contactLabel, forecastName } from '@/lib/i18n/place';
 import { getTheme, setTheme, ThemePref } from '@/lib/theme';
 import { BoatSettings, TileCacheRow } from '@/components/nav/BoatSettings';
 
-const VERSION = '0.6';
+const VERSION = '0.7';
 const INSTAGRAM = 'rakoverlander';
 
 interface SavedRow { id: string; bytes: number; at: string | null }

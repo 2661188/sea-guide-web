@@ -16,6 +16,11 @@ const icon =
 
 export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => watchSystemTheme(), []);
+  // Offline app shell (see public/sw.js). Production only, so development is never stale.
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production' || !('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* not critical */ });
+  }, []);
   return (
     <>
       <Head>
