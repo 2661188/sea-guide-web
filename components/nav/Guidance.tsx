@@ -4,21 +4,26 @@ import { ackAlarm, Active, Alarm, anchorDriftM, Anchor as AnchorT, clearAnchor, 
 import { distUnit, fmtDist } from '@/lib/nav/geo';
 import type { Position } from '@/lib/nav/tracker';
 import { useNavSettings } from '@/lib/nav/settings';
-import { useFmtHours } from './RouteLegs';
+import { EtaResult, fmtClock, fmtTtg } from '@/lib/nav/eta';
 
 const pad3 = (n: number) => String(Math.round(n) % 360).padStart(3, '0');
-const clock = (h: number | null) => {
-  if (h == null || !Number.isFinite(h) || h > 72) return '—';
-  const d = new Date(Date.now() + h * 3600e3);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
+
+/** Time-to-go and ETA text from the navigation engine, or a short reason when there is no estimate. */
+export function useEtaText() {
+  const { t } = useT();
+  const u = { min: t('unit_min'), h: t('unit_h'), lt1: t('unit_lt1') };
+  return {
+    ttg: (r: EtaResult) => (r.status === 'ok' ? fmtTtg(r.hours, u) : t(`eta_${r.status}`)),
+    clock: (r: EtaResult) => (r.status === 'ok' ? fmtClock(r.etaMs) : '—'),
+  };
+}
 
 /** Big, glanceable guidance: where to steer, how far, how long, and cross-track error. */
-export function GuidanceCard({ a, pos }: { a: Active; pos: Position | null }) {
+export function GuidanceCard({ a, pos, lost = false }: { a: Active; pos: Position | null; lost?: boolean }) {
   const { t } = useT();
   const [nav] = useNavSettings();
-  const fh = useFmtHours();
-  const g = computeGuidance(a, pos);
+  const et = useEtaText();
+  const g = computeGuidance(a, pos, lost);
   const name = g?.target.name || (a.kind === 'goto' ? a.name : `WP${String(a.leg + 1).padStart(2, '0')}`);
   const rel = g && pos?.cog != null ? ((g.btw - pos.cog + 540) % 360) - 180 : null;
   const xte = g?.xte ?? null;
@@ -42,8 +47,8 @@ export function GuidanceCard({ a, pos }: { a: Active; pos: Position | null }) {
             <dl className="grid flex-1 grid-cols-2 gap-x-3 gap-y-1">
               <div><dt className="text-[10px] font-semibold uppercase tracking-wider text-white/60">{t('brg')}</dt><dd className="readout text-[34px] leading-none">{pad3(g.btw)}°</dd></div>
               <div><dt className="text-[10px] font-semibold uppercase tracking-wider text-white/60">{t('dist')}</dt><dd className="readout text-[34px] leading-none"><bdi>{fmtDist(g.dtw)}</bdi><span className="ms-0.5 font-sans text-xs text-white/70">{distUnit(g.dtw)}</span></dd></div>
-              <div><dt className="text-[10px] font-semibold uppercase tracking-wider text-white/60">{t('ttg')}</dt><dd className="font-display text-xl font-semibold">{fh(g.ttg)}</dd></div>
-              <div><dt className="text-[10px] font-semibold uppercase tracking-wider text-white/60">{t('eta')}</dt><dd className="font-display text-xl font-semibold tabular-nums">{clock(g.ttg)}</dd></div>
+              <div><dt className="text-[10px] font-semibold uppercase tracking-wider text-white/60">{t('ttg')}</dt><dd className="font-display text-xl font-semibold">{et.ttg(g.eta)}</dd></div>
+              <div><dt className="text-[10px] font-semibold uppercase tracking-wider text-white/60">{t('eta')}</dt><dd className="font-display text-xl font-semibold tabular-nums">{et.clock(g.eta)}</dd></div>
             </dl>
           </div>
           {xte != null && (
@@ -64,7 +69,7 @@ export function GuidanceCard({ a, pos }: { a: Active; pos: Position | null }) {
             </div>
           )}
           {a.kind === 'route' && (
-            <p className="px-4 pt-2 text-xs text-white/80">{t('to_end')}: <b className="tabular-nums">{fmtDist(g.remaining)} {distUnit(g.remaining)}</b> · {fh(g.ttgEnd)} · {t('eta')} {clock(g.ttgEnd)}</p>
+            <p className="px-4 pt-2 text-xs text-white/80">{t('to_end')}: <b className="tabular-nums">{fmtDist(g.remaining)} {distUnit(g.remaining)}</b> · {et.ttg(g.etaEnd)} · {t('eta')} {et.clock(g.etaEnd)}</p>
           )}
           {g.vmg != null && <p className="px-4 text-xs text-white/70">{t('vmg')} <span className="tabular-nums">{g.vmg.toFixed(1)} {t('unit_kn')}</span></p>}
         </>
