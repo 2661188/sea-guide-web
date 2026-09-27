@@ -16,11 +16,12 @@ export interface NavSettings {
   sound: boolean;
   layer: MapLayer;
   seamarks: boolean;
+  orient: 'north' | 'course';
 }
 
 export const DEFAULT_NAV: NavSettings = {
   boatName: '', boatType: 'speedboat', lengthFt: null, cruiseKn: 18, burnLph: null, tankL: null,
-  arriveNm: 0.05, xteNm: 0.1, sound: true, layer: 'map', seamarks: true,
+  arriveNm: 0.05, xteNm: 0.1, sound: true, layer: 'map', seamarks: true, orient: 'north',
 };
 
 let cur: NavSettings | null = null;

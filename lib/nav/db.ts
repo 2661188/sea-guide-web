@@ -15,7 +15,7 @@ export interface Trip {
   maxKn: number;
   points: number;
 }
-export type WpKind = 'mark' | 'fish' | 'dive' | 'marina' | 'ramp' | 'anchor' | 'fuel' | 'hazard' | 'fav' | 'spot';
+export type WpKind = 'mark' | 'home' | 'fish' | 'dive' | 'marina' | 'ramp' | 'anchor' | 'fuel' | 'hazard' | 'fav' | 'spot';
 export interface Waypoint { id: string; name: string; kind: WpKind; lat: number; lon: number; at: number; notes?: string; depth?: number | null }
 export interface RoutePoint { lat: number; lon: number; name?: string; wpId?: string }
 export interface Route { id: string; name: string; points: RoutePoint[]; createdAt: number; updatedAt: number; notes?: string }

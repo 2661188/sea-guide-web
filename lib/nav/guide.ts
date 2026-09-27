@@ -25,6 +25,8 @@ let state: GuideState = { active: null, anchor: null, alarm: null };
 let loaded = false;
 let xteAck = false;
 let anchorSnoozeUntil = 0;
+let anchorOutSince = 0;
+let anchorOutCount = 0;
 const subs = new Set<(s: GuideState) => void>();
 
 function persist() { save('guide', { active: state.active, anchor: state.anchor }); }
@@ -142,9 +144,15 @@ function onPos(pos: Position | null) {
     }
   }
   const an = state.anchor;
-  if (an && pos.acc <= 60) {
+  if (an) {
+    // Allow for GPS error: the boat must appear outside the circle by more than half the
+    // current accuracy, on several consecutive fixes over at least 8 seconds.
     const driftM = nmToM(distanceNm(an, pos));
-    if (driftM > an.radiusM && Date.now() > anchorSnoozeUntil && state.alarm?.type !== 'anchor') emit({ alarm: { type: 'anchor', at: Date.now() } });
+    const outside = pos.acc <= 60 && driftM - pos.acc * 0.5 > an.radiusM;
+    if (outside) { if (!anchorOutSince) anchorOutSince = Date.now(); anchorOutCount++; }
+    else { anchorOutSince = 0; anchorOutCount = 0; }
+    if (outside && anchorOutCount >= 3 && Date.now() - anchorOutSince >= 8000
+      && Date.now() > anchorSnoozeUntil && state.alarm?.type !== 'anchor') emit({ alarm: { type: 'anchor', at: Date.now() } });
   }
 }
 
@@ -199,13 +207,16 @@ export function previousPoint() {
 }
 export function stopGuide() { emit({ active: null, alarm: state.alarm?.type === 'anchor' ? state.alarm : null }); }
 
-export function setAnchor(radiusM: number) {
-  const p = getTracker().pos;
-  if (!p) return false;
+/** Drop anchor at the current position. Needs a reasonably accurate fix. */
+export function setAnchor(radiusM: number): 'ok' | 'nofix' | 'poor' {
+  const t = getTracker();
+  const p = t.pos;
+  if (!p || t.gps === 'lost') return 'nofix';
+  if (p.acc > 30) return 'poor';
   unlockAudio();
-  anchorSnoozeUntil = 0;
+  anchorSnoozeUntil = 0; anchorOutSince = 0; anchorOutCount = 0;
   emit({ anchor: { lat: p.lat, lon: p.lon, radiusM, setAt: Date.now() } });
-  return true;
+  return 'ok';
 }
 export function setAnchorRadius(radiusM: number) { if (state.anchor) emit({ anchor: { ...state.anchor, radiusM } }); }
 export function clearAnchor() { emit({ anchor: null, alarm: state.alarm?.type === 'anchor' ? null : state.alarm }); }

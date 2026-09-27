@@ -1,31 +1,40 @@
 // GPS tracker. One instance for the whole app, so a trip keeps recording while
 // the user switches screens. Works with no internet: GPS fixes come from the
-// phone, and every recorded point is written straight to IndexedDB.
+// phone, every fix is filtered (jumps and noise rejected), and every recorded
+// point is written straight to IndexedDB so a refresh or crash does not lose it.
 import { useEffect, useState } from 'react';
+import { load, save } from '@/lib/storage';
 import { addPoint, allTrips, getTrip, newId, putTrip, tripPoints, Trip, TrackPoint } from './db';
-import { bearing, distanceNm, msToKn } from './geo';
+import { bearing, distanceNm } from './geo';
+import { filterFix, newFilter, Position, shouldRecord } from './gpsfilter';
 
-export type GpsStatus = 'off' | 'searching' | 'ok' | 'weak' | 'denied' | 'unavailable' | 'unsupported';
-
-export interface Position { lat: number; lon: number; acc: number; t: number; speedKn: number | null; cog: number | null }
+export type { Position } from './gpsfilter';
+export type GpsStatus = 'off' | 'searching' | 'ok' | 'weak' | 'lost' | 'denied' | 'unavailable' | 'unsupported';
 
 export interface TrackerState {
   gps: GpsStatus;
   pos: Position | null;
+  lastFixAt: number | null; // wall-clock time of the last accepted fix
   trip: Trip | null;
   track: [number, number][]; // [lon, lat] of recorded points
   returning: boolean;
   resumed: boolean;
+  storageError: boolean; // IndexedDB write failed: trip is only in memory
+  rejected: number; // fixes rejected by the filter (jumps / bad accuracy)
 }
 
-const MIN_MOVE_NM = 8 / 1852; // ignore jitter under ~8 m
-const MAX_GAP_MS = 30e3; // but record at least every 30 s while moving
-const MAX_ACC_M = 50; // fixes worse than this are shown, not recorded
+export const GOOD_ACC_M = 25; // better than this = "GPS active"
+export const REC_ACC_M = 35; // fixes worse than this are shown, not recorded
+const LOST_MS = 20e3; // no fix for this long = "signal lost"
 
-let state: TrackerState = { gps: 'off', pos: null, trip: null, track: [], returning: false, resumed: false };
+let state: TrackerState = { gps: 'off', pos: null, lastFixAt: null, trip: null, track: [], returning: false, resumed: false, storageError: false, rejected: 0 };
 const subs = new Set<(s: TrackerState) => void>();
 let watchId: number | null = null;
+let watchStarted = 0;
+let lostTimer: ReturnType<typeof setInterval> | null = null;
+let filter = newFilter();
 let lastRec: TrackPoint | null = null;
+let lastRecCourse: number | null = null;
 let wakeLock: { release: () => Promise<void> } | null = null;
 let initDone = false;
 const holds = new Set<string>(); // other features that need GPS on (route guidance, anchor alarm)
@@ -38,68 +47,82 @@ function emit(patch: Partial<TrackerState>) {
 async function keepAwake(on: boolean) {
   try {
     const nav = navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } };
-    if (on && nav.wakeLock && !wakeLock && document.visibilityState === 'visible') wakeLock = await nav.wakeLock.request('screen');
+    if (on && nav.wakeLock && !wakeLock && document.visibilityState === 'visible') {
+      wakeLock = await nav.wakeLock.request('screen');
+      (wakeLock as unknown as EventTarget).addEventListener?.('release', () => { wakeLock = null; });
+    }
     if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
   } catch { /* not supported or refused; tracking still works while the screen is on */ }
 }
 
+function storageFailed() { if (!state.storageError) emit({ storageError: true }); }
+
 function onFix(p: GeolocationPosition) {
-  const { latitude: lat, longitude: lon, accuracy: acc, speed, heading } = p.coords;
-  const prev = state.pos;
-  let speedKn = speed != null && !Number.isNaN(speed) ? msToKn(speed) : null;
-  if (speedKn == null && prev) {
-    const dt = (p.timestamp - prev.t) / 3600e3;
-    if (dt > 0) speedKn = distanceNm(prev, { lat, lon }) / dt;
-    if (speedKn != null && speedKn > 70) speedKn = null; // GPS jump, not real speed
+  const c = p.coords;
+  const r = filterFix(filter, { lat: c.latitude, lon: c.longitude, acc: c.accuracy, t: p.timestamp || Date.now(), speed: c.speed, heading: c.heading });
+  if (!r.ok) {
+    // Still hearing from the receiver, but this fix is not trustworthy.
+    if (r.reason === 'accuracy') emit({ gps: 'weak', lastFixAt: state.lastFixAt, rejected: filter.rejected });
+    else emit({ rejected: filter.rejected });
+    return;
   }
-  let cog = heading != null && !Number.isNaN(heading) && (speedKn ?? 0) > 0.8 ? heading : null;
-  if (cog == null && prev && distanceNm(prev, { lat, lon }) > MIN_MOVE_NM) cog = bearing(prev, { lat, lon });
-  if (cog == null && prev?.cog != null && (speedKn ?? 0) > 0.8) cog = prev.cog;
-  const pos: Position = { lat, lon, acc, t: p.timestamp, speedKn, cog };
-  emit({ pos, gps: acc > MAX_ACC_M ? 'weak' : 'ok' });
-  if (state.trip && acc <= MAX_ACC_M) record(pos);
+  const pos = r.pos;
+  emit({ pos, lastFixAt: Date.now(), gps: pos.acc > GOOD_ACC_M ? 'weak' : 'ok', rejected: filter.rejected });
+  if (state.trip && pos.acc <= REC_ACC_M) record(pos);
 }
 
 function record(pos: Position) {
   const trip = state.trip!;
-  const moved = lastRec ? distanceNm(lastRec, pos) : Infinity;
-  const gap = lastRec ? pos.t - lastRec.t : Infinity;
-  if (lastRec && moved < MIN_MOVE_NM && gap < MAX_GAP_MS) return;
-  if (lastRec && moved < MIN_MOVE_NM / 2) return; // stationary: nothing new to draw
+  if (!shouldRecord(lastRec, lastRecCourse, pos)) {
+    if (!trip.start) { const next = { ...trip, start: { lat: pos.lat, lon: pos.lon } }; emit({ trip: next }); putTrip(next).catch(storageFailed); }
+    return;
+  }
   const pt: TrackPoint = { tripId: trip.id, t: pos.t, lat: pos.lat, lon: pos.lon, spd: pos.speedKn, acc: pos.acc };
-  const add = lastRec ? moved : 0;
+  const add = lastRec ? distanceNm(lastRec, pos) : 0;
+  if (lastRec) lastRecCourse = bearing(lastRec, pos);
   lastRec = pt;
   const next: Trip = {
     ...trip,
     start: trip.start ?? { lat: pos.lat, lon: pos.lon },
     end: { lat: pos.lat, lon: pos.lon },
-    distanceNm: trip.distanceNm + (Number.isFinite(add) ? add : 0),
-    maxKn: Math.max(trip.maxKn, pos.speedKn != null && pos.speedKn < 80 ? pos.speedKn : 0),
+    distanceNm: trip.distanceNm + add,
+    maxKn: Math.max(trip.maxKn, pos.speedKn ?? 0),
     points: trip.points + 1,
   };
   emit({ trip: next, track: [...state.track, [pos.lon, pos.lat]] });
-  addPoint(pt).catch(() => { /* storage full: keep going in memory */ });
-  putTrip(next).catch(() => {});
+  addPoint(pt).catch(storageFailed);
+  putTrip(next).catch(storageFailed);
 }
 
 function onError(e: GeolocationPositionError) {
   if (e.code === e.PERMISSION_DENIED) { emit({ gps: 'denied' }); stopWatch(); return; }
-  emit({ gps: state.pos ? 'weak' : e.code === e.POSITION_UNAVAILABLE ? 'unavailable' : 'searching' });
+  if (state.pos) return; // keep last position; the lost-timer decides when to say "lost"
+  emit({ gps: e.code === e.POSITION_UNAVAILABLE ? 'unavailable' : 'searching' });
+}
+
+function checkLost() {
+  if (watchId == null) return;
+  const now = Date.now();
+  if (state.lastFixAt && now - state.lastFixAt > LOST_MS) { if (state.gps !== 'lost') emit({ gps: 'lost' }); }
+  else if (!state.lastFixAt && now - watchStarted > LOST_MS && state.gps === 'searching') emit({ gps: 'searching' });
 }
 
 export function startGps() {
   if (typeof navigator === 'undefined' || !('geolocation' in navigator)) { emit({ gps: 'unsupported' }); return; }
   if (watchId != null) return;
+  watchStarted = Date.now();
   emit({ gps: state.pos ? state.gps : 'searching' });
-  watchId = navigator.geolocation.watchPosition(onFix, onError, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+  watchId = navigator.geolocation.watchPosition(onFix, onError, { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 });
+  if (!lostTimer) lostTimer = setInterval(checkLost, 3000);
 }
 
 function stopWatch() {
   if (watchId != null) navigator.geolocation.clearWatch(watchId);
   watchId = null;
+  if (lostTimer) { clearInterval(lostTimer); lostTimer = null; }
 }
 
-/** Stop GPS when no trip is running (saves battery when leaving Navigate). */
+/** Stop GPS when nothing needs it (saves battery when leaving Navigate). */
 export function releaseGps() {
   if (!state.trip && holds.size === 0) { stopWatch(); emit({ gps: 'off' }); }
 }
@@ -115,15 +138,17 @@ export const getTracker = () => state;
 export function subscribeTracker(fn: (s: TrackerState) => void) { subs.add(fn); return () => { subs.delete(fn); }; }
 
 export async function startTrip(activity: string, name: string) {
+  const good = state.pos && state.pos.acc <= REC_ACC_M && state.gps !== 'lost';
   const trip: Trip = {
     id: newId(), name, activity, status: 'active', startedAt: Date.now(), endedAt: null,
-    start: state.pos && state.pos.acc <= MAX_ACC_M ? { lat: state.pos.lat, lon: state.pos.lon } : null,
+    start: good ? { lat: state.pos!.lat, lon: state.pos!.lon } : null,
     end: null, distanceNm: 0, maxKn: 0, points: 0,
   };
-  lastRec = null;
-  emit({ trip, track: [], returning: false, resumed: false });
-  await putTrip(trip).catch(() => {});
-  if (state.pos && state.pos.acc <= MAX_ACC_M) record(state.pos);
+  lastRec = null; lastRecCourse = null;
+  save('returning', false);
+  emit({ trip, track: [], returning: false, resumed: false, storageError: false });
+  await putTrip(trip).catch(storageFailed);
+  if (good) record(state.pos!);
   startGps();
   keepAwake(true);
 }
@@ -132,31 +157,39 @@ export async function endTrip(): Promise<Trip | null> {
   const trip = state.trip;
   if (!trip) return null;
   const done: Trip = { ...trip, endedAt: Date.now(), status: 'saved' };
-  await putTrip(done).catch(() => {});
-  lastRec = null;
+  await putTrip(done).catch(storageFailed);
+  lastRec = null; lastRecCourse = null;
+  save('returning', false);
   emit({ trip: null, track: [], returning: false });
   if (holds.size === 0) keepAwake(false);
   return done;
 }
 
-export const setReturning = (on: boolean) => emit({ returning: on });
+export const setReturning = (on: boolean) => { save('returning', on); emit({ returning: on }); };
 
-/** Resume a trip that was running when the app was closed or the phone restarted. */
+/** Resume a trip that was running when the app was closed, refreshed or crashed. */
 async function init() {
   if (initDone || typeof window === 'undefined') return;
   initDone = true;
-  document.addEventListener('visibilitychange', () => { if (state.trip || holds.size) keepAwake(document.visibilityState === 'visible'); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (state.trip || holds.size) keepAwake(true);
+    // Some browsers silently stop a watch while hidden: restart it on return.
+    if (watchId != null) { stopWatch(); startGps(); }
+  });
   try {
     const active = (await allTrips()).find((t) => t.status === 'active');
     if (!active) return;
-    const fresh = await getTrip(active.id);
+    const fresh = (await getTrip(active.id)) ?? active;
     const pts = await tripPoints(active.id);
     lastRec = pts[pts.length - 1] ?? null;
-    emit({ trip: fresh ?? active, track: pts.map((p) => [p.lon, p.lat]), resumed: true });
+    lastRecCourse = pts.length > 1 ? bearing(pts[pts.length - 2], pts[pts.length - 1]) : null;
+    emit({ trip: fresh, track: pts.map((p) => [p.lon, p.lat]), resumed: true, returning: load('returning', false) });
     startGps();
     keepAwake(true);
-  } catch { /* IndexedDB unavailable (private mode) */ }
+  } catch { storageFailed(); }
 }
+export const initTracker = () => { init(); };
 
 export function useTracker(): TrackerState {
   const [s, setS] = useState(state);

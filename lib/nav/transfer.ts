@@ -3,7 +3,7 @@ import { addPoint, allRoutes, allTrips, allWaypoints, newId, notifyNavData, putR
 import { downloadText, parseGpx, toGpx } from './gpx';
 import { distanceNm } from './geo';
 
-const KINDS: WpKind[] = ['mark', 'fish', 'dive', 'marina', 'ramp', 'anchor', 'fuel', 'hazard', 'fav', 'spot'];
+const KINDS: WpKind[] = ['mark', 'home', 'fish', 'dive', 'marina', 'ramp', 'anchor', 'fuel', 'hazard', 'fav', 'spot'];
 
 export async function importGpxFile(file: File) {
   const data = parseGpx(await file.text());
