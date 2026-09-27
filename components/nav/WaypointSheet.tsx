@@ -93,9 +93,11 @@ export function WaypointSheet({ wp, pos, onClose, onGoTo, onSaved }:
       {msg && <p className="mt-2 text-sm font-semibold text-lagoon dark:text-shallows">{msg}</p>}
 
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <button onClick={() => save()} className="tap h-12 rounded-2xl bg-abyss font-semibold text-white dark:bg-shallows dark:text-abyss">{t('save')}</button>
-        {onGoTo
-          ? <button onClick={() => save((w) => { onGoTo(w); onClose(); })} className="tap flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#C026D3] font-semibold text-white"><Navigation size={18} /> {t('go_to')}</button>
+        <button onClick={() => save()} className="tap h-12 rounded-2xl text-lg font-bold bg-abyss font-semibold text-white dark:bg-shallows dark:text-abyss">{t('save')}</button>
+        {isNew
+          ? <button onClick={onClose} className="tap h-12 rounded-2xl bg-slate-100 font-semibold dark:bg-white/10">{t('cancel')}</button>
+          : onGoTo
+          ? <button onClick={() => save((w) => { onGoTo(w); onClose(); })} className="tap flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#C026D3] font-semibold text-white"><Navigation size={18} /> {t('nav_here')}</button>
           : <span />}
       </div>
       <div className="mt-2 flex flex-wrap gap-2">

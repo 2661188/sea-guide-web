@@ -81,17 +81,20 @@ export function GuidanceCard({ a, pos }: { a: Active; pos: Position | null }) {
 export function AnchorCard({ an, pos }: { an: AnchorT; pos: Position | null }) {
   const { t } = useT();
   const drift = pos ? anchorDriftM(an, pos) : null;
-  const out = drift != null && drift > an.radiusM;
+  const out = drift != null && pos != null && drift - pos.acc * 0.5 > an.radiusM;
+  const accWarn = pos != null && pos.acc > an.radiusM * 0.6;
   return (
     <section className={`card p-4 ${out ? 'ring-2 ring-bad' : ''}`}>
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-2 font-semibold"><Anchor size={18} className={out ? 'text-bad' : 'text-good'} /> {t('anchor_on')}</p>
-        <button onClick={clearAnchor} className="tap rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold dark:bg-white/10">{t('anchor_off')}</button>
+        <button onClick={clearAnchor} className="tap h-10 rounded-full bg-slate-100 px-4 text-sm font-semibold dark:bg-white/10">{t('anchor_off')}</button>
       </div>
-      <p className="mt-2 text-sm">{t('anchor_drift')}: <b className={`tabular-nums ${out ? 'text-bad' : ''}`}>{drift != null ? `${Math.round(drift)} m` : '—'}</b> / {an.radiusM} m</p>
+      <p className="mt-2 text-base">{t('anchor_drift')}: <b className={`tabular-nums ${out ? 'text-bad' : ''}`}>{drift != null ? `${Math.round(drift)} m` : '—'}</b> / {an.radiusM} m
+        {pos && <span className="muted ms-2 text-xs">±{Math.round(pos.acc)} m</span>}</p>
+      {accWarn && pos && <p className="mt-1 text-xs font-semibold text-amber-700 dark:text-amber-300">{t('anchor_acc_warn', { m: Math.round(pos.acc) })}</p>}
       <div className="mt-2 flex gap-1.5">
-        {[25, 50, 100, 200].map((r) => (
-          <button key={r} onClick={() => setAnchorRadius(r)} className={`tap h-9 flex-1 rounded-lg text-xs font-semibold ${an.radiusM === r ? 'bg-abyss text-white dark:bg-shallows dark:text-abyss' : 'bg-slate-100 dark:bg-white/10'}`}>{r} m</button>
+        {[10, 20, 30, 50].map((r) => (
+          <button key={r} onClick={() => setAnchorRadius(r)} className={`tap h-11 flex-1 rounded-lg text-sm font-semibold ${an.radiusM === r ? 'bg-abyss text-white dark:bg-shallows dark:text-abyss' : 'bg-slate-100 dark:bg-white/10'}`}>{r} m</button>
         ))}
       </div>
     </section>

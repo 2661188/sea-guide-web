@@ -28,8 +28,8 @@ export function DashLine({ pts, p, color = '#FF6B35', animate = true }: { pts: L
 }
 
 /** A planned or active route: magenta line, numbered points, leg distances. */
-export function RouteLine({ pts, p, active = -1, labels = true, dashed = false, z }:
-  { pts: RoutePoint[]; p: ChartProject; active?: number; labels?: boolean; dashed?: boolean; z: number }) {
+export function RouteLine({ pts, p, active = -1, labels = true, dashed = false, z, rot = 0 }:
+  { pts: RoutePoint[]; p: ChartProject; active?: number; labels?: boolean; dashed?: boolean; z: number; rot?: number }) {
   if (!pts.length) return null;
   const ll: LL[] = pts.map((q) => [q.lon, q.lat]);
   const d = path(ll, p);
@@ -46,7 +46,7 @@ export function RouteLine({ pts, p, active = -1, labels = true, dashed = false, 
         if (Math.hypot(x2 - x1, y2 - y1) < 70) return null;
         const brg = Math.round(bearing(a, q));
         return (
-          <text key={i} x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 7} textAnchor="middle" className="map-label fill-fuchsia-800 text-[11px] font-bold dark:fill-fuchsia-200">
+          <text key={i} x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 7} transform={rot ? `rotate(${rot} ${(x1 + x2) / 2} ${(y1 + y2) / 2})` : undefined} textAnchor="middle" className="map-label fill-fuchsia-800 text-[11px] font-bold dark:fill-fuchsia-200">
             {fmtDist(nm)} {distUnit(nm)} · {String(brg).padStart(3, '0')}°
           </text>
         );
@@ -58,8 +58,10 @@ export function RouteLine({ pts, p, active = -1, labels = true, dashed = false, 
           <g key={i} transform={`translate(${x},${y})`}>
             {on && <circle r="15" fill="#C026D3" opacity="0.25"><animate attributeName="r" values="11;18;11" dur="1.8s" repeatCount="indefinite" /></circle>}
             <circle r={on ? 10 : 8.5} fill={i < active ? '#94A3B8' : '#C026D3'} stroke="#fff" strokeWidth="2.2" />
-            <text y="3.8" textAnchor="middle" className="fill-white text-[10px] font-bold">{i + 1}</text>
-            {q.name && z >= 11 && <text x="13" y="4" className="map-label fill-ink text-[11px] font-semibold dark:fill-white">{q.name}</text>}
+            <g transform={rot ? `rotate(${rot})` : undefined}>
+              <text y="3.8" textAnchor="middle" className="fill-white text-[10px] font-bold">{i + 1}</text>
+              {q.name && z >= 11 && <text x="13" y="4" className="map-label fill-ink text-[11px] font-semibold dark:fill-white">{q.name}</text>}
+            </g>
           </g>
         );
       })}
@@ -67,7 +69,7 @@ export function RouteLine({ pts, p, active = -1, labels = true, dashed = false, 
   );
 }
 
-export function WaypointMarkers({ wps, p, selected, z }: { wps: Waypoint[]; p: ChartProject; selected?: string | null; z: number }) {
+export function WaypointMarkers({ wps, p, selected, z, rot = 0 }: { wps: Waypoint[]; p: ChartProject; selected?: string | null; z: number; rot?: number }) {
   return (
     <g>
       {wps.map((w) => {
@@ -75,7 +77,7 @@ export function WaypointMarkers({ wps, p, selected, z }: { wps: Waypoint[]; p: C
         const k = kindOf(w.kind), on = w.id === selected;
         const s = on ? 1.2 : 1;
         return (
-          <g key={w.id} transform={`translate(${x},${y})`}>
+          <g key={w.id} transform={`translate(${x},${y}) rotate(${rot})`}>
             <g transform={`scale(${s})`}>
               <path d="M0 0 C-3 -6 -12 -12 -12 -21 A12 12 0 1 1 12 -21 C12 -12 3 -6 0 0 Z" fill={k.color} stroke="#fff" strokeWidth="2" />
               <k.Icon x={-7} y={-28} width={14} height={14} color="#fff" strokeWidth={2.4} />
@@ -91,10 +93,10 @@ export function WaypointMarkers({ wps, p, selected, z }: { wps: Waypoint[]; p: C
   );
 }
 
-export function StartMarker({ at, p }: { at: { lat: number; lon: number }; p: ChartProject }) {
+export function StartMarker({ at, p, rot = 0 }: { at: { lat: number; lon: number }; p: ChartProject; rot?: number }) {
   const [x, y] = p(at.lon, at.lat);
   return (
-    <g transform={`translate(${x},${y})`}>
+    <g transform={`translate(${x},${y}) rotate(${rot})`}>
       <circle r="10" fill="#06283D" stroke="#fff" strokeWidth="2.5" />
       <text y="4" textAnchor="middle" className="fill-white text-[10px] font-bold">S</text>
     </g>
@@ -142,3 +144,15 @@ export function BearingLine({ from, to, p }: { from: { lat: number; lon: number 
 
 export const metersToPx = (m: number, mpp: number) => m / mpp;
 export { nmToM };
+
+/** Temporary "selected location" marker (tap on the chart). */
+export function SelectedMarker({ at, p }: { at: { lat: number; lon: number }; p: ChartProject }) {
+  const [x, y] = p(at.lon, at.lat);
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <circle r="18" fill="#C026D3" opacity="0.18"><animate attributeName="r" values="12;20;12" dur="1.6s" repeatCount="indefinite" /></circle>
+      <circle r="7" fill="#fff" stroke="#C026D3" strokeWidth="3" />
+      <path d="M0 -22 V-11 M0 11 V22 M-22 0 H-11 M11 0 H22" stroke="#C026D3" strokeWidth="2.5" strokeLinecap="round" />
+    </g>
+  );
+}
