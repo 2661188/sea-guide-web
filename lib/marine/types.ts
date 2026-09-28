@@ -28,12 +28,27 @@ export interface Conditions {
     weatherCode: Num[]; // WMO code
     precipProb: Num[]; // %
     uv: Num[]; // UV index
+    // v0.10 weather board (optional: saved copies from older versions lack them)
+    feelsLike?: Num[]; // °C apparent temperature
+    dewPoint?: Num[]; // °C
+    pressure?: Num[]; // hPa at mean sea level
+    cloud?: Num[]; // % cloud cover
+    aqi?: Num[]; // US EPA AQI
+    pm25?: Num[]; // µg/m³
+    pm10?: Num[]; // µg/m³
+    dust?: Num[]; // µg/m³
   };
   daily: {
     date: string[]; // local "YYYY-MM-DD"
     sunrise: string[]; // local "YYYY-MM-DDTHH:mm"
     sunset: string[];
+    tMax?: Num[]; // °C
+    tMin?: Num[]; // °C
+    code?: Num[]; // WMO weather code
+    uvMax?: Num[];
   };
+  /** Air-quality source, when available. */
+  air?: { name: string; url: string } | null;
 }
 
 export interface ConditionsError {

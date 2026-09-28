@@ -5,6 +5,7 @@ import { en5, ar5 } from './strings5';
 import { en6, ar6 } from './strings6';
 import { en7, ar7 } from './strings7';
 import { en8, ar8 } from './strings8';
+import { en10, ar10 } from './strings10';
 
 export type Lang = 'en' | 'ar';
 export const LANGS: { id: Lang; label: string; dir: 'ltr' | 'rtl' }[] = [
@@ -160,7 +161,7 @@ const enBase = {
   slider_label: 'Time to check the tide',
   tagline: 'Tides, weather & watersports',
 };
-const en = { ...enBase, ...en5, ...en6, ...en7, ...en8 };
+const en = { ...enBase, ...en5, ...en6, ...en7, ...en8, ...en10 };
 
 export type Key = keyof typeof en;
 
@@ -169,6 +170,7 @@ const ar: Record<Key, string> = {
   ...ar6,
   ...ar7,
   ...ar8,
+  ...ar10,
   app_name: 'بحرنا',
   nav_home: 'الرئيسية', nav_map: 'الخريطة', nav_fishing: 'الصيد', nav_trips: 'الرحلات', nav_learn: 'تعلّم',
   captain: 'القبطان',

@@ -15,7 +15,7 @@ import { BoatSettings, TileCacheRow } from '@/components/nav/BoatSettings';
 import { getInstagram, instagramUrl, setInstagram, DEFAULT_INSTAGRAM } from '@/lib/social/instagram';
 import { getAi, setAi, AiSettings, DEFAULT_AI } from '@/lib/ai/captain';
 
-const VERSION = '0.9';
+const VERSION = '0.10';
 
 interface SavedRow { id: string; bytes: number; at: string | null }
 

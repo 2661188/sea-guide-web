@@ -6,7 +6,8 @@ import { TideChart } from '@/components/TideChart';
 import { TideExplorer } from '@/components/TideExplorer';
 import { WindExplorer } from '@/components/WindExplorer';
 import { FishingToday } from '@/components/FishingToday';
-import { Compass, Daylight, Gauges, HourStrip, SportsDonut, Temps, TideTable, WeekOutlook } from '@/components/Dashboard';
+import { HourStrip, SportsDonut, TideTable, WeekOutlook } from '@/components/Dashboard';
+import { WeatherBoardSection } from '@/components/WeatherBoard';
 import { ActivityIcon } from '@/components/ActivityIcon';
 import { ErrorState, LoadingScreen, OfflineBanner, SectionTitle, SourceTag, toneDot, toneText, Val } from '@/components/ui';
 import { useSpot } from '@/lib/SpotContext';
@@ -135,6 +136,9 @@ export default function Home() {
               </div>
             </div>
 
+            {/* WEATHER NOW: temperature, 7 days, wind, humidity, visibility, pressure, air, UV, sun, sea */}
+            <WeatherBoardSection data={data} i={v.i} nowMs={v.now} placeName={spotArea(spot, lang) ?? spotName(spot, lang)} />
+
             {/* WEEK EXPLORERS: tide + wind */}
             <div className="grid gap-3 md:grid-cols-2 lg:gap-4">
               <TideExplorer data={data} extremes={v.extremes} nowMs={v.now} />
@@ -146,15 +150,6 @@ export default function Home() {
               <div className="md:col-span-5"><SportsDonut acts={v.acts} activity={activity} onPick={setActivity} /></div>
               <div className="md:col-span-7"><HourStrip data={data} activity={activity} i={v.i} /></div>
             </div>
-
-            {/* GAUGES */}
-            <SectionTitle right={<SourceTag kind="live" />}>{t('gauges')}</SectionTitle>
-            <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 lg:gap-4">
-              <Gauges data={data} i={v.i} />
-              <Compass data={data} i={v.i} />
-              <Daylight data={data} nowMs={v.now} />
-              <Temps data={data} i={v.i} />
-            </section>
 
             {/* TABLES */}
             <div className="grid gap-3 md:grid-cols-12 lg:gap-4">

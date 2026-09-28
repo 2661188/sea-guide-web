@@ -7,6 +7,7 @@ import type { Conditions, Num } from '../types';
 
 const MARINE = 'https://marine-api.open-meteo.com/v1/marine';
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
+const AIR = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 const DAYS = 7;
 
 async function getJson(url: string) {
@@ -32,9 +33,13 @@ export async function fetchOpenMeteo(spotId: string, lat: number, lon: number, t
   const forecastUrl =
     `${FORECAST}?latitude=${lat}&longitude=${lon}&timezone=${tz}&forecast_days=${DAYS}&wind_speed_unit=kn` +
     `&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m,relative_humidity_2m,visibility,weather_code,precipitation_probability,uv_index` +
-    `&daily=sunrise,sunset`;
+    `,apparent_temperature,dew_point_2m,pressure_msl,cloud_cover` +
+    `&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min,weather_code,uv_index_max`;
+  const airUrl = `${AIR}?latitude=${lat}&longitude=${lon}&timezone=${tz}&forecast_days=${DAYS}&hourly=us_aqi,pm2_5,pm10,dust`;
 
-  const [m, f] = await Promise.all([getJson(marineUrl), getJson(forecastUrl)]);
+  // Air quality is a bonus: if that service fails, the marine forecast still loads.
+  const [m, f, a] = await Promise.all([getJson(marineUrl), getJson(forecastUrl), getJson(airUrl).catch(() => null)]);
+  const at: string[] = a?.hourly?.time ?? [];
   const time: string[] = m.hourly?.time ?? [];
   if (!time.length) throw new Error('No marine data for this location');
   const ft: string[] = f.hourly?.time ?? [];
@@ -65,12 +70,25 @@ export async function fetchOpenMeteo(spotId: string, lat: number, lon: number, t
       weatherCode: align(time, ft, f.hourly?.weather_code),
       precipProb: align(time, ft, f.hourly?.precipitation_probability),
       uv: align(time, ft, f.hourly?.uv_index),
+      feelsLike: align(time, ft, f.hourly?.apparent_temperature),
+      dewPoint: align(time, ft, f.hourly?.dew_point_2m),
+      pressure: align(time, ft, f.hourly?.pressure_msl),
+      cloud: align(time, ft, f.hourly?.cloud_cover),
+      aqi: align(time, at, a?.hourly?.us_aqi),
+      pm25: align(time, at, a?.hourly?.pm2_5),
+      pm10: align(time, at, a?.hourly?.pm10),
+      dust: align(time, at, a?.hourly?.dust),
     },
     daily: {
       date: f.daily?.time ?? [],
       sunrise: f.daily?.sunrise ?? [],
       sunset: f.daily?.sunset ?? [],
+      tMax: f.daily?.temperature_2m_max,
+      tMin: f.daily?.temperature_2m_min,
+      code: f.daily?.weather_code,
+      uvMax: f.daily?.uv_index_max,
     },
+    air: a ? { name: 'Open-Meteo Air Quality (CAMS)', url: 'https://open-meteo.com/en/docs/air-quality-api' } : null,
   };
 }
 

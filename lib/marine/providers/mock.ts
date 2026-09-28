@@ -37,12 +37,21 @@ export function mockConditions(spotId: string, mode: string): Conditions {
       weatherCode: time.map((_, i) => (i > 110 && i < 116 ? 95 : i % 30 < 6 ? 2 : 0)),
       precipProb: h((i) => (i > 108 && i < 118 ? 60 : 0)),
       uv: h((i) => Math.max(0, 11 * Math.sin((((i % 24) - 6) / 12.2) * Math.PI))),
+      feelsLike: h((i) => 35 + 5 * Math.sin(((i % 24) - 9) / 3.82)),
+      dewPoint: h((i) => 21 + 3 * Math.cos(((i % 24) - 4) / 3.82)),
+      pressure: h((i) => 1006 + 2 * Math.sin(i / 14)),
+      cloud: h((i) => (i % 30 < 6 ? 40 : 5)),
+      aqi: h((i) => 90 + 35 * Math.sin(i / 11)),
+      pm25: h(() => 28),
+      pm10: h((i) => 80 + 60 * Math.sin(i / 11)),
+      dust: h((i) => 60 + 70 * Math.sin(i / 11)),
     },
     daily: {
       date,
       sunrise: date.map((d) => `${d}T06:08`),
       sunset: date.map((d) => `${d}T18:13`),
     },
+    air: { name: 'MOCK air quality', url: 'https://open-meteo.com' },
   };
 }
 
