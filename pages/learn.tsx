@@ -1,3 +1,4 @@
+import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import { ExternalLink, Lightbulb, Phone, X } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
@@ -20,6 +21,12 @@ export default function Learn() {
   const { t, lang } = useT();
   const [cat, setCat] = useState<LearnCat | 'all'>('all');
   const [open, setOpen] = useState<LearnItem | null>(null);
+  const router = useRouter();
+  // Deep link: /learn?lesson=mob opens that lesson (used by the Safety Center).
+  useEffect(() => {
+    const id = typeof router.query.lesson === 'string' ? router.query.lesson : null;
+    if (id) { const it = LEARN.find((x) => x.id === id); if (it) setOpen(it); }
+  }, [router.query.lesson]);
   const items = LEARN.filter((i) => cat === 'all' || i.cat === cat);
   const KNOTS: LearnCat[] = ['boat_knots', 'fishing_knots'];
   const groups: { id: string; title: string; cats: LearnCat[]; sub?: string }[] = cat === 'all'

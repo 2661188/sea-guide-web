@@ -14,6 +14,36 @@ export interface Trip {
   distanceNm: number;
   maxKn: number;
   points: number;
+  // v0.11 (optional; older trips don't have them)
+  notes?: string;
+  conditions?: TripConditions | null; // forecast snapshot when the trip started
+  fuelStartL?: number | null; // fuel on board at start (user-entered level), if tracked
+  fuelUsedL?: number | null; // estimate saved at the end
+}
+/** What the forecast said at the start of a trip (Open-Meteo model data, not measurements). */
+export interface TripConditions {
+  windKn: number | null; gustKn: number | null; windDir: number | null; waveM: number | null;
+  airC: number | null; tide: 'rising' | 'falling' | 'slack' | null; source: string; fetchedAt: string;
+}
+/** A catch in the private logbook. Location precision is chosen by the user. */
+export interface Catch {
+  id: string;
+  at: number;
+  species: string;
+  count: number;
+  weightKg: number | null;
+  lengthCm: number | null;
+  bait: string;
+  technique: string;
+  depthM: number | null;
+  notes: string;
+  privacy: 'exact' | 'area' | 'hidden';
+  lat: number | null; // exact, or rounded to ~5 km for 'area', null for 'hidden'
+  lon: number | null;
+  photo: Blob | null;
+  tripId: string | null;
+  conditions: TripConditions | null;
+  released: boolean;
 }
 export type WpKind = 'mark' | 'home' | 'fish' | 'dive' | 'marina' | 'ramp' | 'anchor' | 'fuel' | 'hazard' | 'fav' | 'spot';
 export interface Waypoint { id: string; name: string; kind: WpKind; lat: number; lon: number; at: number; notes?: string; depth?: number | null }
@@ -58,7 +88,7 @@ let dbp: Promise<IDBDatabase> | null = null;
 function open(): Promise<IDBDatabase> {
   if (dbp) return dbp;
   dbp = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 3);
+    const req = indexedDB.open(DB, 4);
     req.onupgradeneeded = (e) => {
       const db = req.result;
       if (e.oldVersion < 1) {
@@ -69,6 +99,7 @@ function open(): Promise<IDBDatabase> {
       }
       if (e.oldVersion < 2) db.createObjectStore('routes', { keyPath: 'id' });
       if (e.oldVersion < 3) db.createObjectStore('plans', { keyPath: 'id' });
+      if (e.oldVersion < 4) db.createObjectStore('catches', { keyPath: 'id' });
     };
     req.onblocked = () => { /* another tab has the old version open; it will close on reload */ };
     req.onsuccess = () => { const db = req.result; db.onversionchange = () => { db.close(); dbp = null; }; resolve(db); };
@@ -119,6 +150,10 @@ export const deleteRoute = (id: string) => tx<void>('routes', 'readwrite', (s) =
 export const putPlan = (p: TripPlan) => tx<void>('plans', 'readwrite', (s) => { s.put(p); });
 export const allPlans = () => tx<TripPlan[]>('plans', 'readonly', (s) => s.getAll()).then((l) => l.sort((a, b) => `${a.date}${a.departure}`.localeCompare(`${b.date}${b.departure}`)));
 export const deletePlan = (id: string) => tx<void>('plans', 'readwrite', (s) => { s.delete(id); });
+
+export const putCatch = (c: Catch) => tx<void>('catches', 'readwrite', (st) => { st.put(c); });
+export const allCatches = () => tx<Catch[]>('catches', 'readonly', (st) => st.getAll()).then((l) => l.sort((a, b) => b.at - a.at));
+export const deleteCatch = (id: string) => tx<void>('catches', 'readwrite', (st) => { st.delete(id); });
 
 /** Tell open screens that saved waypoints/routes/trips changed (e.g. after an import). */
 export function notifyNavData() { if (typeof window !== 'undefined') window.dispatchEvent(new Event('bahrna:navdata')); }

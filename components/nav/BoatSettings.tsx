@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Ship, Trash2 } from 'lucide-react';
+import { Fuel, Lock, Ship, Trash2 } from 'lucide-react';
+import { refuel, rangeNm, setFuelLevel } from '@/lib/nav/fuel';
 import { useT } from '@/lib/i18n/LangContext';
 import type { Key } from '@/lib/i18n/strings';
 import { NavSettings, useNavSettings } from '@/lib/nav/settings';
@@ -49,6 +50,62 @@ export function BoatSettings() {
         <NumField label={t('tank_l')} value={s.tankL} onChange={(v) => set({ tankL: v })} />
       </div>
       {range != null && <p className="muted text-xs">{t('range_nm', { nm: range })} (80%)</p>}
+      <div className="grid grid-cols-2 gap-2">
+        <TextField label={t('bp_engine')} value={s.engine} onChange={(v) => set({ engine: v })} />
+        <NumField label={t('bp_hp')} value={s.hp} onChange={(v) => set({ hp: v })} />
+      </div>
+      <TextField label={t('bp_marina')} value={s.homeMarina} onChange={(v) => set({ homeMarina: v })} />
+      <div className="space-y-2 rounded-2xl bg-slate-50 p-3 dark:bg-white/5">
+        <p className="flex items-center gap-1.5 text-xs font-semibold"><Lock size={13} /> {t('bp_private')}</p>
+        <TextField label={t('bp_reg')} value={s.registration} onChange={(v) => set({ registration: v })} />
+        <div className="grid grid-cols-2 gap-2">
+          <TextField label={t('bp_em_name')} value={s.emergencyName} onChange={(v) => set({ emergencyName: v })} />
+          <TextField label={t('bp_em_phone')} value={s.emergencyPhone} onChange={(v) => set({ emergencyPhone: v })} tel />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TextField({ label, value, onChange, tel }: { label: string; value: string; onChange: (v: string) => void; tel?: boolean }) {
+  return (
+    <label className="block text-sm font-medium">{label}
+      <input value={value} onChange={(e) => onChange(e.target.value)} maxLength={60} inputMode={tel ? 'tel' : undefined} dir={tel ? 'ltr' : undefined}
+        className="mt-1 h-11 w-full rounded-xl border-0 bg-slate-100 px-3 text-base dark:bg-white/10" />
+    </label>
+  );
+}
+
+/** Optional fuel tracking: level on board, refuels, estimated range. All estimates. */
+export function FuelCard() {
+  const { t } = useT();
+  const [s] = useNavSettings();
+  const [add, setAdd] = useState('');
+  const r = rangeNm(s.fuelL, s);
+  const pct = s.fuelL != null && s.tankL ? Math.round((s.fuelL / s.tankL) * 100) : null;
+  return (
+    <section className="card space-y-3 p-4 text-sm">
+      <p className="flex items-center gap-2"><Fuel size={18} className="text-lagoon dark:text-shallows" /><span className="muted">{t('fuel_t')}</span></p>
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="eyebrow">{t('fuel_now')}</p>
+          <p className="readout mt-1 text-[34px]">{s.fuelL != null ? Math.round(s.fuelL) : '—'}<span className="ms-1 font-sans text-sm font-medium text-slate-400">L{pct != null ? ` · ${pct}%` : ''}</span></p>
+          {s.fuelAt && <p className="muted text-[11px]">{t('fuel_set_at', { d: new Date(s.fuelAt).toLocaleDateString() })}</p>}
+        </div>
+        {r != null && <p className="text-end text-xs"><span className="muted block">{t('fuel_range')}</span><b className="text-base tabular-nums">≈ {Math.round(r)} NM</b></p>}
+      </div>
+      {pct != null && <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><div className={`h-full rounded-full ${pct < 25 ? 'bg-bad' : pct < 50 ? 'bg-caution' : 'bg-good'}`} style={{ width: `${pct}%` }} /></div>}
+      <div className="grid grid-cols-2 gap-2">
+        <NumField label={t('fuel_level')} value={s.fuelL != null ? Math.round(s.fuelL) : null} onChange={(v) => { if (v != null) setFuelLevel(v); }} />
+        <label className="block text-sm font-medium">{t('fuel_add')}
+          <span className="mt-1 flex gap-1">
+            <input value={add} onChange={(e) => setAdd(e.target.value)} inputMode="decimal" placeholder="L" className="h-11 min-w-0 flex-1 rounded-xl border-0 bg-slate-100 px-3 text-base tabular-nums dark:bg-white/10" />
+            <button onClick={() => { const v = parseFloat(add.replace(',', '.')); if (Number.isFinite(v) && v > 0) { refuel(v); setAdd(''); } }} className="tap h-11 rounded-xl bg-abyss px-3 text-sm font-bold text-white">+</button>
+          </span>
+        </label>
+      </div>
+      {s.tankL != null && <button onClick={() => refuel(null)} className="tap h-11 w-full rounded-xl bg-lagoon/10 text-sm font-semibold text-lagoon dark:text-shallows">{t('fuel_full', { l: s.tankL })}</button>}
+      <p className="muted text-[11px] leading-snug">{t('fuel_est_note')}</p>
     </section>
   );
 }

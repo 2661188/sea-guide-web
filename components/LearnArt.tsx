@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 
 export const ArtLang = createContext<'en' | 'ar'>('en');
-const AR: Record<string, string> = {"5 turns, back through both loops": "5 لفّات ثم من الحلقتين", "6 wraps inside the loop, pull the tag end": "6 لفّات داخل الحلقة ثم اسحب الطرف", "all straps": "كل الأحزمة", "closed": "مغلقة", "snug fit": "مقاس محكم", "approach slowly at 30–45°": "اقترب ببطء بزاوية 30–45°", "boat on your right": "القارب على يمينك", "has priority": "له الأولوية", "you give way": "أنت تفسح الطريق", "bow into the wind, slow": "مقدمة القارب عكس الريح وببطء", "bow line held on shore": "حبل المقدمة ممسوك على البر", "drain plug in, straps off": "سدادة التصريف مركبة والأحزمة مفكوكة", "engine up before the ramp": "ارفع المحرك قبل المنحدر", "fenders out, lines ready": "الصدّامات للخارج والحبال جاهزة", "figure-eight turns, then a locking hitch": "لفّات على شكل 8 ثم عقدة قفل", "fixed loop": "حلقة ثابتة", "line up slowly, winch the bow": "اصطف ببطء واسحب المقدمة بالونش", "return upwind, engine off": "ارجع من جهة الريح وأطفئ المحرك قربه", "right over left, then left over right": "يمين فوق يسار ثم يسار فوق يمين", "ring or rail": "حلقة أو درابزين", "rope 5×": "الحبل 5×", "scope: rope at least 5 × the depth": "طول الحبل 5 أضعاف العمق على الأقل", "shout, point, throw": "اصرخ، أشر، ارمِ الطوق", "standing part": "الجزء الثابت", "tail": "الطرف", "thick rope (bight)": "حبل سميك (انحناءة)", "thin rope": "حبل رفيع", "to boat": "إلى القارب", "two half hitches": "نصف عقدتين", "wind / current": "الريح / التيار", "doubled line, overhand, loop over hook": "خيط مزدوج، عقدة بسيطة، الحلقة فوق الخطاف", "MAYDAY ×3": "ماي داي ×3", "boat name": "اسم القارب", "position": "الموقع", "problem": "المشكلة", "people on board": "عدد الأشخاص"};
+const AR: Record<string, string> = {"you are": "أنت", "somewhere": "في مكان ما", "in the circle": "داخل الدائرة", "heading": "اتجاه المقدمة", "COG (real track)": "COG (المسار الفعلي)", "1 NM = 1.852 km": "1 ميل بحري = 1.852 كم", "1 NM": "1 ميل بحري", "10 kn = 10 NM in 1 hour": "10 عقد = 10 أميال بحرية في الساعة", "1 minute of latitude = 1 NM": "دقيقة عرض واحدة = 1 ميل بحري", "same place, three formats": "نفس المكان بثلاث صيغ", "fuel & tank vent": "الوقود وفتحة تهوية الخزان", "kill-switch lanyard": "حبل مفتاح الإيقاف", "fuel bulb firm": "كرة الوقود مشدودة", "anchor if drifting": "ارمِ المخطاف إذا انجرفت", "16: distress & calling": "16: الاستغاثة والنداء", "MAYDAY: life in danger": "MAYDAY: خطر على الأرواح", "PAN-PAN: urgent": "PAN-PAN: عاجل", "SECURITÉ: safety info": "SECURITÉ: معلومات سلامة", "falling fast = more wind likely": "انخفاض سريع = رياح أقوى محتملة", "5 turns, back through both loops": "5 لفّات ثم من الحلقتين", "6 wraps inside the loop, pull the tag end": "6 لفّات داخل الحلقة ثم اسحب الطرف", "all straps": "كل الأحزمة", "closed": "مغلقة", "snug fit": "مقاس محكم", "approach slowly at 30–45°": "اقترب ببطء بزاوية 30–45°", "boat on your right": "القارب على يمينك", "has priority": "له الأولوية", "you give way": "أنت تفسح الطريق", "bow into the wind, slow": "مقدمة القارب عكس الريح وببطء", "bow line held on shore": "حبل المقدمة ممسوك على البر", "drain plug in, straps off": "سدادة التصريف مركبة والأحزمة مفكوكة", "engine up before the ramp": "ارفع المحرك قبل المنحدر", "fenders out, lines ready": "الصدّامات للخارج والحبال جاهزة", "figure-eight turns, then a locking hitch": "لفّات على شكل 8 ثم عقدة قفل", "fixed loop": "حلقة ثابتة", "line up slowly, winch the bow": "اصطف ببطء واسحب المقدمة بالونش", "return upwind, engine off": "ارجع من جهة الريح وأطفئ المحرك قربه", "right over left, then left over right": "يمين فوق يسار ثم يسار فوق يمين", "ring or rail": "حلقة أو درابزين", "rope 5×": "الحبل 5×", "scope: rope at least 5 × the depth": "طول الحبل 5 أضعاف العمق على الأقل", "shout, point, throw": "اصرخ، أشر، ارمِ الطوق", "standing part": "الجزء الثابت", "tail": "الطرف", "thick rope (bight)": "حبل سميك (انحناءة)", "thin rope": "حبل رفيع", "to boat": "إلى القارب", "two half hitches": "نصف عقدتين", "wind / current": "الريح / التيار", "doubled line, overhand, loop over hook": "خيط مزدوج، عقدة بسيطة، الحلقة فوق الخطاف", "MAYDAY ×3": "ماي داي ×3", "boat name": "اسم القارب", "position": "الموقع", "problem": "المشكلة", "people on board": "عدد الأشخاص"};
 const useL = () => { const l = useContext(ArtLang); return (s: string) => (l === 'ar' ? AR[s] ?? s : s); };
 
 // Hand-drawn style SVG sketches for knots and boating skills. Ropes are drawn
@@ -376,6 +376,102 @@ export function LifeJacket() {
       <Txt x={200} y={68} anchor="middle">snug fit</Txt>
       <Txt x={200} y={82} anchor="middle">all straps</Txt>
       <Txt x={200} y={96} anchor="middle">closed</Txt>
+    </Frame>
+  );
+}
+
+// ---- v0.11 navigation & safety basics ----
+export function GpsAccuracy() {
+  return (
+    <Frame label="GPS accuracy circle">
+      <rect x="0" y="0" width="240" height="150" className="fill-sky-200/70 dark:fill-sky-900/60" />
+      <circle cx="90" cy="75" r="50" fill="#0E7C86" opacity="0.15" stroke="#0E7C86" strokeDasharray="4 4" />
+      <circle cx="90" cy="75" r="7" fill="#0E7C86" stroke="#fff" strokeWidth="2.5" />
+      <path d="M90 75 H140" stroke="#06283D" strokeWidth="1.5" />
+      <Txt x={115} y={70}>± 15 m</Txt>
+      <Txt x={195} y={60}>you are</Txt>
+      <Txt x={195} y={74}>somewhere</Txt>
+      <Txt x={195} y={88}>in the circle</Txt>
+    </Frame>
+  );
+}
+
+export function CogHeading() {
+  return (
+    <Frame label="Heading versus course over ground">
+      <rect x="0" y="0" width="240" height="150" className="fill-sky-200/70 dark:fill-sky-900/60" />
+      <BoatTop x={100} y={95} r={0} s={0.8} />
+      <Arrow d="M100 62 V14" color="#06283D" /><Head x={100} y={14} r={-90} color="#06283D" />
+      <Arrow d="M100 62 L150 18" color="#FF6B35" /><Head x={150} y={18} r={-41} />
+      <Arrow d="M30 120 H70" color="#0E7C86" /><Head x={70} y={120} r={0} color="#0E7C86" />
+      <Txt x={70} y={20} anchor="end">heading</Txt>
+      <Txt x={190} y={28}>COG (real track)</Txt>
+      <Txt x={50} y={140}>wind / current</Txt>
+    </Frame>
+  );
+}
+
+export function NmKnots() {
+  return (
+    <Frame label="Nautical miles and knots">
+      <rect x="0" y="0" width="240" height="150" className="fill-sky-200/70 dark:fill-sky-900/60" />
+      <path d="M20 70 H220" stroke="#06283D" strokeWidth="2.5" />
+      {[20, 120, 220].map((x) => <path key={x} d={`M${x} 62 V78`} stroke="#06283D" strokeWidth="2.5" />)}
+      <Txt x={70} y={56}>1 NM = 1.852 km</Txt>
+      <Txt x={170} y={56}>1 NM</Txt>
+      <Txt x={120} y={104}>10 kn = 10 NM in 1 hour</Txt>
+      <Txt x={120} y={124}>1 minute of latitude = 1 NM</Txt>
+    </Frame>
+  );
+}
+
+export function CoordFormats() {
+  return (
+    <Frame label="Coordinate formats">
+      <rect x="18" y="22" width="204" height="106" rx="10" fill="#1F2937" />
+      <text x="120" y="50" textAnchor="middle" fontSize="13" fontWeight="700" fill="#86EFAC" direction="ltr">25°15.300′ N 055°17.400′ E</text>
+      <text x="120" y="76" textAnchor="middle" fontSize="12" fontWeight="600" fill="#CBD5E1" direction="ltr">25°15′18″ N 055°17′24″ E</text>
+      <text x="120" y="102" textAnchor="middle" fontSize="12" fontWeight="600" fill="#CBD5E1" direction="ltr">25.25500, 55.29000</text>
+      <Txt x={120} y={144}>same place, three formats</Txt>
+    </Frame>
+  );
+}
+
+export function EngineFailure() {
+  return (
+    <Frame label="Engine failure checks">
+      <rect x="0" y="80" width="240" height="70" className="fill-sky-200/70 dark:fill-sky-900/60" />
+      <rect x="30" y="40" width="46" height="50" rx="8" fill="#374151" />
+      <rect x="44" y="90" width="18" height="34" fill="#4B5563" />
+      {['fuel & tank vent', 'kill-switch lanyard', 'fuel bulb firm', 'anchor if drifting'].map((l, k) => (
+        <g key={l}><circle cx="104" cy={38 + k * 22} r="3.5" fill={k === 3 ? '#D64545' : '#0E7C86'} /><Txt x={112} y={42 + k * 22} anchor="start">{l}</Txt></g>
+      ))}
+    </Frame>
+  );
+}
+
+export function VhfBasics() {
+  return (
+    <Frame label="VHF radio basics">
+      <rect x="28" y="26" width="64" height="104" rx="10" fill="#1F2937" />
+      <rect x="38" y="38" width="44" height="26" rx="3" fill="#86EFAC" />
+      <text x="60" y="57" textAnchor="middle" fontSize="15" fontWeight="800" fill="#064E3B" direction="ltr">16</text>
+      <rect x="76" y="6" width="6" height="22" rx="2" fill="#1F2937" />
+      {['16: distress & calling', 'MAYDAY: life in danger', 'PAN-PAN: urgent', 'SECURITÉ: safety info'].map((l, k) => (
+        <g key={l}><circle cx="108" cy={40 + k * 22} r="3.5" fill={k < 2 ? '#D64545' : '#0E7C86'} /><Txt x={116} y={44 + k * 22} anchor="start">{l}</Txt></g>
+      ))}
+    </Frame>
+  );
+}
+
+export function PressureWind() {
+  return (
+    <Frame label="Pressure and wind">
+      <path d="M20 40 Q70 36 110 60 T220 110" stroke="#0E7C86" strokeWidth="3" fill="none" />
+      <path d="M20 130 H220" stroke="#94A3B8" strokeWidth="1.5" />
+      <Txt x={40} y={30}>1012 hPa</Txt>
+      <Txt x={200} y={100}>1006</Txt>
+      <Txt x={120} y={144}>falling fast = more wind likely</Txt>
     </Frame>
   );
 }

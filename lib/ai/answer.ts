@@ -233,7 +233,9 @@ export async function answer(p: Parsed): Promise<Reply> {
       const stale = old ? L(lang, ` (forecast from ${Math.round((m.ageMin ?? 0) / 60)} h ago)`, ` (توقعات قبل ${Math.round((m.ageMin ?? 0) / 60)} ساعة)`) : '';
       const staleS = old ? L(lang, ' This forecast is a few hours old.', ' هالتوقعات قديمة شوي.') : '';
       const trend = c.tideTrend === 'Rising' ? L(lang, 'rising', 'المد طالع') : c.tideTrend === 'Falling' ? L(lang, 'falling', 'الماي نازل') : c.tideTrend === 'Slack' ? L(lang, 'slack', 'المد راكد') : null;
-      const nt = c.nextTides[0];
+      // "When is high tide?" → the next HIGH, not just the next turn of the tide.
+      const wantT = /\bhigh\b|العالي|عالي|المد العالي/.test(p.text) ? 'high' : /\blow\b|الجزر|جزر|منخفض/.test(p.text) ? 'low' : null;
+      const nt = (wantT && c.nextTides.find((x) => x.type === wantT)) || c.nextTides[0];
       const ntText = nt ? L(lang, `${nt.type === 'high' ? 'High' : 'Low'} tide at ${fmtClock(nt.at)}`, `${nt.type === 'high' ? 'المد العالي' : 'الجزر'} الساعة ${fmtClock(nt.at)}`) : '';
       const ntSay = nt ? L(lang, `${nt.type === 'high' ? 'High' : 'Low'} tide at ${sayClock(nt.at, 'en')}.`, `${nt.type === 'high' ? 'المد العالي' : 'الجزر'} الساعة ${sayClock(nt.at, 'ar')}.`) : '';
       if (p.intent === 'tide') {

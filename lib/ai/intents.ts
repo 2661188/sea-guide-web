@@ -167,7 +167,7 @@ export function parse(raw: string, pendingConfirm = false): Parsed {
   if (has(s, /\b(stop|end|finish|terminate)\b.*\b(record|recording|trip|tracking|track|logging)\b|(وقف|اوقف|انهي|انه|خلص|سكر|طف) ?(ال)?(تسجيل|رحله|الرحله|التتبع)/)) return { ...base, intent: 'endTrip' };
 
   // 5. Explicit commands with a verb (save / go back) — not when phrased as a question.
-  const isQ = has(s, /\b(how|what|what'?s|where|when|which|is|are|do|does|did|can|tell me)\b|(^|\s)(كم|وين|متي|شو|ايش|شلون|كيف|هل|قد ايش|چم)(\s|$)/);
+  const isQ = has(s, /\b(how|what|what'?s|where|when|which|is|are|do|does|did|can|tell me)\b|(^|\s)(كم|وين|متي|شو|ايش|شلون|كيف|هل|قد ايش|چم)(\s|$)/) || /[?؟]\s*$/.test(raw); // Gulf Arabic often asks without a question word: "باجر زين للصيد؟"
   if (has(s, /\b(save|mark|store|add|drop|remember)\b.*\b(this|here|location|spot|place|position|point|waypoint|mark)\b|\bmark (this|here|it)\b|\bsave (it|this)\b|(احفظ|سجل|خزن|علم|ثبت|حط) ?(هالمكان|هذا المكان|المكان|الموقع|هالموقع|هذا الموقع|هني|هنا|النقطه|نقطه|علامه)|(احفظه|سجله|خزنه) |^(احفظه|سجله|خزنه)$|هذا المكان (حق|للصيد|لل)/)) {
     const nm = s.match(/\b(?:as|called|named|name it)\s+['"]?([a-z0-9][a-z0-9 ]{1,30})['"]?$/) || s.match(/(?:باسم|اسمه|سمه|سميه)\s+(.{2,30})$/);
     let wpName = nm ? nm[1].trim().replace(/^(a|an|the|my)\s+/, '') : undefined;

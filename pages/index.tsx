@@ -8,6 +8,7 @@ import { WindExplorer } from '@/components/WindExplorer';
 import { FishingToday } from '@/components/FishingToday';
 import { HourStrip, SportsDonut, TideTable, WeekOutlook } from '@/components/Dashboard';
 import { WeatherBoardSection } from '@/components/WeatherBoard';
+import { AskCard, ComingUpCard, NavStatusCard, SafetyMaintRow } from '@/components/HomeCards';
 import { ActivityIcon } from '@/components/ActivityIcon';
 import { ErrorState, LoadingScreen, OfflineBanner, SectionTitle, SourceTag, toneDot, toneText, Val } from '@/components/ui';
 import { useSpot } from '@/lib/SpotContext';
@@ -131,9 +132,16 @@ export default function Home() {
               </section>
 
               {/* FISHING TODAY — answer first */}
-              <div className="md:col-span-5">
+              <div className="min-w-0 md:col-span-5">
                 <FishingToday data={data} hours={v.hours} windows={v.windows} now={v.now} compact />
               </div>
+            </div>
+
+            {/* ASK BAHRNA · COMING UP · NAVIGATION STATUS */}
+            <div className="grid gap-3 md:grid-cols-3 lg:gap-4">
+              <AskCard />
+              <ComingUpCard data={data} i={v.i} />
+              <NavStatusCard />
             </div>
 
             {/* WEATHER NOW: temperature, 7 days, wind, humidity, visibility, pressure, air, UV, sun, sea */}
@@ -147,14 +155,14 @@ export default function Home() {
 
             {/* SPORTS DONUT + 24H STRIP */}
             <div className="grid gap-3 md:grid-cols-12 lg:gap-4">
-              <div className="md:col-span-5"><SportsDonut acts={v.acts} activity={activity} onPick={setActivity} /></div>
-              <div className="md:col-span-7"><HourStrip data={data} activity={activity} i={v.i} /></div>
+              <div className="min-w-0 md:col-span-5"><SportsDonut acts={v.acts} activity={activity} onPick={setActivity} /></div>
+              <div className="min-w-0 md:col-span-7"><HourStrip data={data} activity={activity} i={v.i} /></div>
             </div>
 
             {/* TABLES */}
             <div className="grid gap-3 md:grid-cols-12 lg:gap-4">
-              <div className="md:col-span-5"><TideTable extremes={v.extremes} nowMs={v.now} /></div>
-              <div className="md:col-span-7"><WeekOutlook data={data} activity={activity} /></div>
+              <div className="min-w-0 md:col-span-5"><TideTable extremes={v.extremes} nowMs={v.now} /></div>
+              <div className="min-w-0 md:col-span-7"><WeekOutlook data={data} activity={activity} /></div>
             </div>
 
             {/* ALL ACTIVITIES AT A GLANCE */}
@@ -173,6 +181,7 @@ export default function Home() {
               ))}
             </section>
 
+            <SafetyMaintRow />
             <div className="grid gap-3 md:grid-cols-2">
               <Link href="/map" className="card tap flex items-center gap-4 p-4">
                 <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-lagoon/10 text-lagoon dark:text-shallows"><MapPin size={24} /></span>

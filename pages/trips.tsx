@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { ArrowLeft, ChevronRight, Compass, Download, MapPin, Navigation, Plus, Route as RouteIcon, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Pencil, Compass, Download, MapPin, Navigation, Plus, Route as RouteIcon, Trash2, Upload } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
 import { ActivityIcon } from '@/components/ActivityIcon';
 import { Checklist } from '@/components/Checklist';
@@ -10,11 +10,13 @@ import { RouteDetail } from '@/components/nav/RouteLegs';
 import { WaypointSheet } from '@/components/nav/WaypointSheet';
 import { kindOf } from '@/components/nav/kinds';
 import { TripStats, tripStats } from '@/components/TripSummary';
+import { TripExtras, useTripAnalysis } from '@/components/nav/TripExtras';
+import { CatchLog } from '@/components/CatchLog';
 import { SectionTitle, Skeleton } from '@/components/ui';
 import { PlannedTrips } from '@/components/nav/PlannedTrips';
 import { useT } from '@/lib/i18n/LangContext';
 import {
-  allRoutes, allTrips, allWaypoints, deleteTrip, getRoute, getTrip, newId, notifyNavData, onNavData, putRoute, Route, RoutePoint, tripPoints, Trip, TrackPoint, Waypoint,
+  allRoutes, allTrips, allWaypoints, deleteTrip, getRoute, getTrip, newId, notifyNavData, onNavData, putRoute, putTrip, Route, RoutePoint, tripPoints, Trip, TrackPoint, Waypoint,
 } from '@/lib/nav/db';
 import { distUnit, fmtDist, fmtDuration, fmtLat, fmtLon, pathNm, simplify } from '@/lib/nav/geo';
 import { downloadText, safeName, toGpx } from '@/lib/nav/gpx';
@@ -193,6 +195,14 @@ function TripDetail({ id }: { id: string }) {
   const [points, setPoints] = useState<TrackPoint[]>([]);
   const [confirmDel, setConfirmDel] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [editName, setEditName] = useState<string | null>(null);
+  const an = useTripAnalysis(trip ?? null, points.length ? points : undefined);
+  const rename = async () => {
+    if (!trip || editName == null) return;
+    const next = { ...trip, name: editName.trim() || trip.name };
+    await putTrip(next).catch(() => {});
+    notifyNavData(); setTrip(next); setEditName(null);
+  };
   useEffect(() => {
     getTrip(id).then((x) => setTrip(x ?? null)).catch(() => setTrip(null));
     tripPoints(id).then(setPoints).catch(() => {});
@@ -219,14 +229,24 @@ function TripDetail({ id }: { id: string }) {
   return (
     <div className="space-y-3 pb-6">
       <button onClick={() => router.push('/trips')} className="tap inline-flex items-center gap-1.5 text-sm font-semibold text-lagoon dark:text-shallows"><ArrowLeft size={16} className="rtl:rotate-180" /> {t('back')}</button>
-      <h2 className="font-display text-3xl font-semibold">{trip.name}</h2>
+      {editName == null ? (
+        <h2 className="flex items-center gap-2 font-display text-3xl font-semibold">{trip.name}
+          <button onClick={() => setEditName(trip.name)} aria-label={t('rename')} className="tap grid h-9 w-9 place-items-center rounded-full bg-slate-100 dark:bg-white/10"><Pencil size={15} /></button>
+        </h2>
+      ) : (
+        <div className="flex gap-2">
+          <input value={editName} onChange={(e) => setEditName(e.target.value)} maxLength={60} autoFocus aria-label={t('trip_name')} className="h-12 min-w-0 flex-1 rounded-xl border-0 bg-slate-100 px-3 text-base dark:bg-white/10" />
+          <button onClick={rename} aria-label={t('save')} className="tap grid h-12 w-12 place-items-center rounded-xl bg-abyss text-white"><Check size={18} /></button>
+        </div>
+      )}
       <div className="grid gap-3 lg:grid-cols-12 lg:items-start">
         <section className="card overflow-hidden lg:col-span-7">
           <MiniChart track={track} start={trip.start} className="h-[340px] w-full md:h-[460px]" />
         </section>
         <section className="card p-4 lg:col-span-5">
-          <TripStats trip={trip} />
+          <TripStats trip={trip} an={an} />
           <p className="muted mt-3 text-xs">{t('recorded')}: {points.length} GPS</p>
+          <div className="mt-3"><TripExtras key={trip.id} trip={trip} an={an} onChange={setTrip} /></div>
           {msg && <p className="mt-2 text-sm font-semibold text-lagoon dark:text-shallows">{msg}</p>}
           <div className="mt-4 flex flex-wrap gap-2">
             <button onClick={asRoute} disabled={points.length < 2} className="tap inline-flex h-11 items-center gap-2 rounded-full bg-[#C026D3] px-4 text-sm font-semibold text-white disabled:opacity-40"><RouteIcon size={15} /> {t('save_as_route')}</button>
@@ -236,6 +256,7 @@ function TripDetail({ id }: { id: string }) {
             </button>
           </div>
         </section>
+        <div className="lg:col-span-12"><CatchLog tripId={trip.id} /></div>
       </div>
     </div>
   );

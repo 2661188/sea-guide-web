@@ -17,6 +17,13 @@ import { CaptainPanel, MicButton } from '@/components/ai/CaptainPanel';
 import { CaptainSheet } from '@/components/CaptainSheet';
 import { useCaptain } from '@/lib/ai/captain';
 import { TripStats } from '@/components/TripSummary';
+import { TripBriefing } from '@/components/nav/TripBriefing';
+import { TripExtras, useTripAnalysis } from '@/components/nav/TripExtras';
+import { CatchLog } from '@/components/CatchLog';
+import { requestNotifyPermission } from '@/lib/native/notify';
+import { snapshotAt } from '@/lib/marine/snapshot';
+import { nowLocalMs } from '@/lib/marine/time';
+import { useConditions } from '@/lib/useConditions';
 import { Sheet } from '@/components/Sheet';
 import { useT } from '@/lib/i18n/LangContext';
 import type { Key } from '@/lib/i18n/strings';
@@ -58,6 +65,8 @@ export default function Navigate() {
   const { activity, spot } = useSpot();
   const s = useTracker();
   const guide = useGuide();
+  const cond = useConditions(spot.id);
+  const [briefing, setBriefing] = useState(false);
   const [nav, setNav] = useNavSettings();
   const online = useOnline();
   const cap = useCaptain();
@@ -241,7 +250,15 @@ export default function Navigate() {
   };
 
   // ---------- Trip ----------
-  const onStart = () => { if (!asked) allow(); startTrip(activity, t('trip_default', { activity: t(`act_${activity}`) })); };
+  // START shows the briefing first; the briefing's big button actually starts recording.
+  const onStart = () => setBriefing(true);
+  const reallyStart = () => {
+    setBriefing(false);
+    if (!asked) allow();
+    requestNotifyPermission();
+    const conditions = cond.data ? snapshotAt(cond.data, nowLocalMs(cond.data.utcOffsetSeconds)) : null;
+    startTrip(activity, t('trip_default', { activity: t(`act_${activity}`) }), { conditions, fuelStartL: nav.fuelL });
+  };
   const doEnd = async () => {
     setEndAsk(false);
     const track = s.track.slice();
@@ -684,6 +701,7 @@ export default function Navigate() {
       )}
       <CaptainSheet open={askOpen} onClose={() => setAskOpen(false)} />
       <EmergencySheet open={sos} onClose={() => setSos(false)} pos={pos} canReturn={!!trip && !!start} onReturn={() => { if (start) { setReturning(true); setFollow(true); } }} onSave={markHere} />
+      {briefing && <TripBriefing activity={activity} spotId={spot.id} onStart={reallyStart} onClose={() => setBriefing(false)} />}
       {done && <TripDone trip={done.trip} track={done.track} onClose={() => setDone(null)} onOpen={() => router.push(`/trips?trip=${done.trip.id}`)} />}
     </AppShell>
   );
@@ -778,9 +796,11 @@ function LayerSheet({ layer, seamarks, onChange, onClose }: { layer: MapLayer; s
 
 function TripDone({ trip, track, onClose, onOpen }: { trip: Trip; track: [number, number][]; onClose: () => void; onOpen: () => void }) {
   const { t } = useT();
+  const [cur, setCur] = useState(trip);
   const [name, setName] = useState(trip.name);
   const [confirmDel, setConfirmDel] = useState(false);
-  const saveIt = async () => { await putTrip({ ...trip, name: name.trim() || trip.name }).catch(() => {}); notifyNavData(); onOpen(); };
+  const an = useTripAnalysis(trip);
+  const saveIt = async () => { await putTrip({ ...cur, name: name.trim() || trip.name }).catch(() => {}); notifyNavData(); onOpen(); };
   const del = async () => {
     if (!confirmDel) { setConfirmDel(true); return; }
     await deleteTrip(trip.id).catch(() => {});
@@ -793,11 +813,14 @@ function TripDone({ trip, track, onClose, onOpen }: { trip: Trip; track: [number
       <div className="animate-rise relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-5 pb-safe shadow-2xl dark:bg-[#0A2B40] md:rounded-3xl">
         <p className="flex items-center gap-2 text-good"><Check size={20} /><span className="font-display text-3xl font-bold uppercase text-ink dark:text-white">{t('trip_complete')}</span></p>
         {track.length > 1 && <div className="mt-3 overflow-hidden rounded-2xl"><MiniChart track={track} start={trip.start} className="h-48 w-full" /></div>}
-        <div className="mt-3"><TripStats trip={trip} /></div>
+        <div className="mt-3"><TripStats trip={cur} an={an} /></div>
+        <div className="mt-3"><TripExtras trip={cur} an={an} onChange={setCur} /></div>
+        <div className="mt-3"><CatchLog tripId={trip.id} compact /></div>
         <label className="mt-4 block text-sm font-medium">{t('trip_name')}
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} className="mt-1 h-12 w-full rounded-xl border-0 bg-slate-100 px-3 text-base dark:bg-white/10" />
         </label>
         <button onClick={saveIt} className="tap mt-4 h-14 w-full rounded-2xl bg-abyss text-lg font-bold text-white">{t('save_trip')}</button>
+        <button onClick={onClose} className="tap mt-2 h-12 w-full rounded-2xl bg-slate-100 font-semibold dark:bg-white/10">{t('close')}</button>
         <button onClick={del} className={`tap mt-2 h-12 w-full rounded-2xl font-semibold ${confirmDel ? 'bg-bad text-white' : 'text-bad'}`}>{confirmDel ? t('discard_confirm') : t('discard')}</button>
       </div>
     </div>

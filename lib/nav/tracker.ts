@@ -179,12 +179,12 @@ export function holdGps(key: string, on: boolean) {
 export const getTracker = () => state;
 export function subscribeTracker(fn: (s: TrackerState) => void) { subs.add(fn); return () => { subs.delete(fn); }; }
 
-export async function startTrip(activity: string, name: string) {
+export async function startTrip(activity: string, name: string, extra: Partial<Pick<Trip, 'conditions' | 'fuelStartL'>> = {}) {
   const good = state.pos && state.pos.acc <= REC_ACC_M && state.gps !== 'lost';
   const trip: Trip = {
     id: newId(), name, activity, status: 'active', startedAt: Date.now(), endedAt: null,
     start: good ? { lat: state.pos!.lat, lon: state.pos!.lon } : null,
-    end: null, distanceNm: 0, maxKn: 0, points: 0,
+    end: null, distanceNm: 0, maxKn: 0, points: 0, ...extra,
   };
   lastRec = null; lastRecCourse = null;
   save('returning', false);

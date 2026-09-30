@@ -4,7 +4,7 @@ import { useT } from '@/lib/i18n/LangContext';
 
 // Privacy policy for the website and the Android app (linked from Google Play and Settings).
 // Keep this in step with what the code actually does.
-const UPDATED = '27 September 2026';
+const UPDATED = '30 September 2026';
 
 type Sec = { h: string; p: string[] };
 
@@ -29,7 +29,9 @@ const EN: Sec[] = [
     'Map, satellite and sea-chart tiles are downloaded from OpenStreetMap, Esri (ArcGIS), OpenSeaMap and GEBCO. Like any website, these services receive your device’s IP address and the map area being downloaded.',
   ] },
   { h: 'What is stored on your phone', p: [
-    'Trips and track points, waypoints, routes, trip plans, boat profile, home point, app language and settings, and the Instagram username you enter in Settings. Uninstalling the app or clearing its storage deletes them. Bahrna has no copy.',
+    'Trips and track points (with your trip notes and the forecast at the start), waypoints, routes, trip plans, boat profile (including registration number and emergency contact, if you enter them), fuel log, maintenance log, catch log (species, sizes, photos you take, and the location only at the precision you choose: exact, area or not saved), home point, app language and settings, and the Instagram username you enter in Settings. Uninstalling the app or clearing its storage deletes them. Bahrna has no copy.',
+    'Registration number and emergency contact are never sent to the AI service. Catch photos are shrunk and kept on the phone; nothing is published.',
+    'Reminders and alarms (anchor alarm, arrival, off-course, maintenance reminders) are local notifications created on your phone. No push server is used.',
   ] },
   { h: 'Children', p: ['Bahrna is not directed at children under 13 and does not knowingly collect their data.'] },
   { h: 'Safety', p: [
@@ -61,7 +63,9 @@ const AR: Sec[] = [
     'طبقات الخرائط والأقمار الصناعية والخرائط البحرية تُحمّل من OpenStreetMap وEsri وOpenSeaMap وGEBCO، وهذه الخدمات تستقبل عنوان IP لجهازك ومنطقة الخريطة المحمّلة مثل أي موقع إنترنت.',
   ] },
   { h: 'ما يُحفظ في هاتفك', p: [
-    'الرحلات ونقاط المسار، النقاط، المسارات، خطط الرحلات، ملف القارب، نقطة البيت، اللغة والإعدادات، واسم إنستغرام اللي تكتبه في الإعدادات. حذف التطبيق أو مسح بياناته يحذفها، ولا توجد نسخة لدى بحرنا.',
+    'الرحلات ونقاط المسار (مع ملاحظاتك والتوقعات عند بداية الرحلة)، النقاط، المسارات، خطط الرحلات، ملف القارب (ومنه رقم التسجيل وجهة اتصال الطوارئ إذا أدخلتها)، سجل الوقود، سجل الصيانة، سجل الصيد (النوع والمقاسات والصور اللي تلتقطها، والموقع بالدقة اللي تختارها فقط: دقيق أو منطقة أو بدون حفظ)، نقطة البيت، اللغة والإعدادات، واسم إنستغرام اللي تكتبه في الإعدادات. حذف التطبيق أو مسح بياناته يحذفها، ولا توجد نسخة لدى بحرنا.',
+    'رقم التسجيل وجهة اتصال الطوارئ لا تُرسل أبداً لخدمة الذكاء الاصطناعي. صور الصيد تُصغّر وتبقى على الهاتف؛ لا يُنشر شيء.',
+    'التذكيرات والتنبيهات (إنذار المخطاف، الوصول، الانحراف عن المسار، تذكير الصيانة) إشعارات محلية تُنشأ على هاتفك. لا يوجد خادم إشعارات.',
   ] },
   { h: 'الأطفال', p: ['بحرنا غير موجّه للأطفال دون 13 سنة ولا يجمع بياناتهم عن قصد.'] },
   { h: 'السلامة', p: [
@@ -81,7 +85,7 @@ export default function Privacy() {
       <article className="mx-auto max-w-2xl space-y-5 pb-8">
         <header>
           <h1 className="font-display text-3xl font-bold uppercase tracking-wide text-ink dark:text-white">{ar ? 'سياسة الخصوصية' : 'Privacy policy'}</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{ar ? 'بحرنا · آخر تحديث: ٢٧ سبتمبر ٢٠٢٦' : `Bahrna · Last updated: ${UPDATED}`}</p>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{ar ? 'بحرنا · آخر تحديث: ٣٠ سبتمبر ٢٠٢٦' : `Bahrna · Last updated: ${UPDATED}`}</p>
         </header>
         {secs.map((s) => (
           <section key={s.h} className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/5 dark:bg-white/5 dark:ring-white/10">

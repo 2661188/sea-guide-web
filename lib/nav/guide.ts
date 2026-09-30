@@ -7,6 +7,7 @@ import { alongTrackNm, bearing, crossTrackNm, distanceNm, Fix, nmToM } from './g
 import { getNav } from './settings';
 import { closingSpeed, EtaResult, timeToGo } from './eta';
 import { getTracker, holdGps, Position, subscribeTracker } from './tracker';
+import { notify, requestNotifyPermission } from '@/lib/native/notify';
 
 export interface Active {
   kind: 'goto' | 'route';
@@ -66,9 +67,32 @@ function beep(urgent: boolean) {
     o.connect(g).connect(ctx!.destination); o.start(t0); o.stop(t0 + 0.2);
   });
 }
+// System notification so the alarm is noticed with the screen off / app in the background.
+let notifiedAt = 0;
+function notifyAlarm(a: Alarm) {
+  if (a.at === notifiedAt) return;
+  notifiedAt = a.at;
+  const ar = load<string>('lang', 'en') === 'ar';
+  const n = a.name || (ar ? 'النقطة' : 'the point');
+  const text: Record<AlarmType, [string, string]> = ar ? {
+    anchor: ['⚠️ سحب المرساة', 'القارب خارج دائرة المرساة. تحقق من موقعك الآن.'],
+    xte: ['⚠️ خارج المسار', 'أنت بعيد عن خط المسار. افتح بحرنا.'],
+    arrive: [`وصلت إلى ${n}`, 'التوجه للنقطة التالية.'],
+    end: [`وصلت إلى ${n}`, 'انتهى المسار.'],
+  } : {
+    anchor: ['⚠️ ANCHOR DRAG', 'The boat is outside the anchor circle. Check your position now.'],
+    xte: ['⚠️ Off course', 'You are off the route line. Open Bahrna.'],
+    arrive: [`Arrived at ${n}`, 'Heading to the next point.'],
+    end: [`Arrived at ${n}`, 'End of route.'],
+  };
+  const [title, body] = text[a.type];
+  notify(a.type === 'anchor' ? 1001 : a.type === 'xte' ? 1002 : 1003, title, body, 'alarm');
+}
+
 function syncBeeper() {
   const a = state.alarm;
   if (!a) { if (beepTimer) clearInterval(beepTimer); beepTimer = null; return; }
+  notifyAlarm(a);
   if (beepTimer) return;
   const urgent = a.type === 'anchor' || a.type === 'xte';
   beep(urgent);
@@ -173,6 +197,7 @@ function init() {
 // ---------- Public actions ----------
 export function goTo(target: RoutePoint) {
   unlockAudio();
+  requestNotifyPermission();
   const p = getTracker().pos;
   const origin: RoutePoint = p ? { lat: p.lat, lon: p.lon } : target;
   xteAck = false;
@@ -183,6 +208,7 @@ export function goTo(target: RoutePoint) {
 export function followRoute(routeId: string, name: string, pts: RoutePoint[]) {
   if (pts.length < 2) return;
   unlockAudio();
+  requestNotifyPermission();
   const p = getTracker().pos;
   let leg = 1;
   if (p) {
@@ -218,6 +244,7 @@ export function setAnchor(radiusM: number): 'ok' | 'nofix' | 'poor' {
   if (!p || t.gps === 'lost') return 'nofix';
   if (p.acc > 30) return 'poor';
   unlockAudio();
+  requestNotifyPermission();
   anchorSnoozeUntil = 0; anchorOutSince = 0; anchorOutCount = 0;
   emit({ anchor: { lat: p.lat, lon: p.lon, radiusM, setAt: Date.now() } });
   return 'ok';

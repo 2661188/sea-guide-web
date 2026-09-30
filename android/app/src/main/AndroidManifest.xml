@@ -43,6 +43,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Keep the screen on while navigating -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Reminders use inexact timing; exact alarms are not needed (Play policy) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
     <!-- Works on devices without GPS hardware too (e.g. Wi-Fi tablets), with less accuracy -->
     <uses-feature
         android:name="android.hardware.location.gps"

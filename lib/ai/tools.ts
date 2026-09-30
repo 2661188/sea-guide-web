@@ -11,6 +11,8 @@ import { fishingHours, fishingWindows } from '@/lib/marine/assess';
 import { nowLocalMs, dayKey } from '@/lib/marine/time';
 import { buildContext, currentSpot, savedConditions } from './context';
 import { planTrip, PlanRequest } from './planner';
+import { snapshotAt } from '@/lib/marine/snapshot';
+import { getNav } from '@/lib/nav/settings';
 
 export type Action =
   | { type: 'returnStart' }
@@ -112,7 +114,9 @@ export async function executeAction(a: Action): Promise<{ ok: boolean; trip?: Tr
     }
     case 'startTrip': {
       if (getTracker().trip) return { ok: false };
-      await startTrip(load<string>('activity', 'boating') || 'boating', `Trip ${new Date().toLocaleDateString('en-GB')}`);
+      const sc = savedConditions();
+      await startTrip(load<string>('activity', 'boating') || 'boating', `Trip ${new Date().toLocaleDateString('en-GB')}`,
+        { conditions: sc ? snapshotAt(sc, nowLocalMs(sc.utcOffsetSeconds)) : null, fuelStartL: getNav().fuelL });
       return { ok: true };
     }
     case 'endTrip': {

@@ -1,7 +1,7 @@
 import { ReactNode, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { BookOpen, ChevronDown, Compass, Fish, House, Map as MapIcon, RefreshCw, Route, Settings, ShipWheel, Mic } from 'lucide-react';
+import { BookOpen, ChevronDown, Compass, Fish, House, LifeBuoy, Map as MapIcon, RefreshCw, Route, Settings, ShipWheel, Mic } from 'lucide-react';
 import { useSpot } from '@/lib/SpotContext';
 import { useT } from '@/lib/i18n/LangContext';
 import type { Key } from '@/lib/i18n/strings';
@@ -18,6 +18,7 @@ const TABS: { href: string; label: Key; Icon: typeof House }[] = [
   { href: '/learn', label: 'nav_learn', Icon: BookOpen },
 ];
 const EXTRA: { href: string; label: Key; Icon: typeof House }[] = [
+  { href: '/safety', label: 'sf_title', Icon: LifeBuoy },
   { href: '/map', label: 'stations_link', Icon: MapIcon },
   { href: '/settings', label: 'nav_settings', Icon: Settings },
 ];
@@ -136,6 +137,9 @@ export function AppShell({ children, title, status, showSpot = true, hideCaptain
                 <RefreshCw size={14} className={status.refreshing ? 'animate-spin' : ''} />
                 {updated ?? '--:--'}
               </button>
+            )}
+            {router.pathname !== '/safety' && (
+              <Link href="/safety" aria-label={t('sf_title')} title={t('sf_title')} className="tap grid h-10 w-10 place-items-center rounded-full bg-bad/10 text-bad lg:hidden"><LifeBuoy size={19} /></Link>
             )}
             <button onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')} aria-label={t('switch_lang')} title={t('switch_lang')}
               className="tap grid h-10 min-w-10 place-items-center rounded-full bg-white px-2.5 text-sm font-bold text-lagoon shadow-sm dark:bg-white/10 dark:text-shallows">

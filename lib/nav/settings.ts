@@ -17,11 +17,21 @@ export interface NavSettings {
   layer: MapLayer;
   seamarks: boolean;
   orient: 'north' | 'course';
+  // v0.11 boat profile (private: stays on this phone, never shared or uploaded)
+  engine: string;
+  hp: number | null;
+  homeMarina: string;
+  registration: string;
+  emergencyName: string;
+  emergencyPhone: string;
+  fuelL: number | null; // fuel on board as last entered by the user (litres)
+  fuelAt: number | null; // when it was entered
 }
 
 export const DEFAULT_NAV: NavSettings = {
   boatName: '', boatType: 'speedboat', lengthFt: null, cruiseKn: 18, burnLph: null, tankL: null,
   arriveNm: 0.05, xteNm: 0.1, sound: true, layer: 'map', seamarks: true, orient: 'north',
+  engine: '', hp: null, homeMarina: '', registration: '', emergencyName: '', emergencyPhone: '', fuelL: null, fuelAt: null,
 };
 
 let cur: NavSettings | null = null;

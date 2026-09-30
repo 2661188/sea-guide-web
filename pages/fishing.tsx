@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Minus, Plus, Sunrise, Su
 import { AppShell } from '@/components/AppShell';
 import { TideChart } from '@/components/TideChart';
 import { FishingToday } from '@/components/FishingToday';
+import { CatchLog } from '@/components/CatchLog';
 import { MoonIcon } from '@/components/MoonIcon';
 import { WeatherIcon } from '@/components/WeatherIcon';
 import { ErrorState, LoadingScreen, OfflineBanner, SectionTitle, SourceTag, toneText } from '@/components/ui';
@@ -77,6 +78,7 @@ export default function Fishing() {
           <WeekView data={data} days={base.days} now={base.now} hours={base.hours} extremes={base.extremes} onPick={setPickedDay} today={today} />
         )}
 
+        <CatchLog />
         <HowWeEstimate />
       </div>
     </AppShell>

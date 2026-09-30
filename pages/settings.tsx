@@ -11,11 +11,12 @@ import { ACTIVITIES } from '@/lib/marine/activities';
 import { EMIRATES, REGIONS, DEFAULT_REGION, findSpot } from '@/lib/regions';
 import { spotName, contactLabel, forecastName } from '@/lib/i18n/place';
 import { getTheme, setTheme, ThemePref } from '@/lib/theme';
-import { BoatSettings, TileCacheRow } from '@/components/nav/BoatSettings';
+import { BoatSettings, FuelCard, TileCacheRow } from '@/components/nav/BoatSettings';
+import { MaintenanceCard } from '@/components/Maintenance';
 import { getInstagram, instagramUrl, setInstagram, DEFAULT_INSTAGRAM } from '@/lib/social/instagram';
 import { getAi, setAi, AiSettings, DEFAULT_AI } from '@/lib/ai/captain';
 
-const VERSION = '0.10';
+const VERSION = '0.11';
 
 interface SavedRow { id: string; bytes: number; at: string | null }
 
@@ -105,6 +106,8 @@ export default function SettingsPage() {
           {/* MY BOAT */}
           <SectionTitle>{t('my_boat')}</SectionTitle>
           <BoatSettings />
+          <FuelCard />
+          <MaintenanceCard />
         </div>
 
         <div className="space-y-3">
