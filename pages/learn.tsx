@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
-import { ExternalLink, Lightbulb, Phone, X } from 'lucide-react';
+import { ExternalLink, Lightbulb, Minus, Phone, Plus, X } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
 import { SectionTitle, SourceTag } from '@/components/ui';
 import { ArtLang } from '@/components/LearnArt';
@@ -94,6 +94,7 @@ export default function Learn() {
 
 function LearnSheet({ item, onClose }: { item: LearnItem; onClose: () => void }) {
   const { t, lang } = useT();
+  const [zoom, setZoom] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -108,7 +109,15 @@ function LearnSheet({ item, onClose }: { item: LearnItem; onClose: () => void })
           <button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full hover:bg-slate-100 dark:hover:bg-white/10" aria-label={t('close')}><X size={20} /></button>
         </div>
         <div className="px-5 pb-6">
-          <div className="overflow-hidden rounded-2xl ring-1 ring-slate-200 dark:ring-white/10"><item.Art /></div>
+          {item.image ? (
+            <>
+              <button onClick={() => setZoom(true)} aria-label={t('lr_tap_zoom')} className="tap block w-full overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200 dark:ring-white/10">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={item.image.src} alt={item.title[lang]} width={item.image.w} height={item.image.h} className="h-auto w-full" />
+              </button>
+              <p className="muted mt-1.5 flex items-center justify-between gap-2 text-[11px]"><span>{t('lr_tap_zoom')}</span>{item.image.credit && <span className="text-end">{item.image.credit[lang]}</span>}</p>
+            </>
+          ) : <div className="overflow-hidden rounded-2xl ring-1 ring-slate-200 dark:ring-white/10"><item.Art /></div>}
           <p className="mt-3 text-sm"><span className="font-semibold">{t('use_for')}: </span>{item.use[lang]}</p>
           <p className="eyebrow mt-4">{t('steps')}</p>
           <ol className="mt-2 space-y-2">
@@ -123,6 +132,32 @@ function LearnSheet({ item, onClose }: { item: LearnItem; onClose: () => void })
             <Lightbulb size={18} className="shrink-0" /> <span><b>{t('tip')}: </b>{item.tip[lang]}</span>
           </p>
         </div>
+      </div>
+      {zoom && item.image && <ZoomViewer src={item.image.src} alt={item.title[lang]} onClose={() => setZoom(false)} />}
+    </div>
+  );
+}
+
+/** Full-screen picture with zoom buttons; drag/scroll to move around. */
+function ZoomViewer({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  const { t } = useT();
+  const [k, setK] = useState(1);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); onClose(); } };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onClose]);
+  const btn = 'tap grid h-12 w-12 place-items-center rounded-full bg-white/90 text-abyss shadow-lg';
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/90" role="dialog" aria-modal="true" aria-label={alt}>
+      <div className="h-full w-full overflow-auto" dir="ltr">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt={alt} style={{ width: `${k * 100}%`, maxWidth: 'none' }} className="mx-auto h-auto" />
+      </div>
+      <div className="pt-safe absolute end-3 top-3 flex gap-2">
+        <button onClick={() => setK((v) => Math.max(1, v / 1.5))} disabled={k <= 1} aria-label={t('zoom_out')} className={`${btn} disabled:opacity-40`}><Minus size={22} /></button>
+        <button onClick={() => setK((v) => Math.min(4, v * 1.5))} disabled={k >= 4} aria-label={t('zoom_in')} className={`${btn} disabled:opacity-40`}><Plus size={22} /></button>
+        <button onClick={onClose} aria-label={t('close')} className={btn}><X size={22} /></button>
       </div>
     </div>
   );

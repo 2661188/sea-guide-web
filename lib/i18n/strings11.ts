@@ -66,6 +66,7 @@ export const en11 = {
   hc_ex3: 'When is high tide?', hc_ex4: 'Is tomorrow morning good for fishing?',
   hc_coming: 'Coming up', hc_coming_note: 'Next 12 hours from the forecast model.',
   hc_safety_t: 'Emergency numbers, your position, checklist', hc_maint_due: '{n} item(s) due soon or overdue',
+  lr_tap_zoom: 'Tap the picture to zoom', lr_picture: 'Full picture',
 };
 
 export const ar11: Record<keyof typeof en11, string> = {
@@ -125,4 +126,5 @@ export const ar11: Record<keyof typeof en11, string> = {
   hc_ex3: 'متى المد العالي؟', hc_ex4: 'بكرة الصبح زين للصيد؟',
   hc_coming: 'القادم', hc_coming_note: 'الساعات الـ12 القادمة من نموذج التوقعات.',
   hc_safety_t: 'أرقام الطوارئ، موقعك، قائمة التحقق', hc_maint_due: '{n} بند قريب الموعد أو متأخر',
+  lr_tap_zoom: 'اضغط على الصورة للتكبير', lr_picture: 'الصورة كاملة',
 };

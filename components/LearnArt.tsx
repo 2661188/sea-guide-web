@@ -475,3 +475,11 @@ export function PressureWind() {
     </Frame>
   );
 }
+
+// ---- Sea heritage: reference pictures (bundled in the app, work offline) ----
+function Picture({ src, label }: { src: string; label: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt={label} className="h-full w-full bg-white object-cover" loading="lazy" />;
+}
+export const DururThumb = () => <Picture src="/learn/durur-thumb.jpg" label="Al Durur calendar" />;
+export const StarCompassThumb = () => <Picture src="/learn/star-compass-thumb.jpg" label="Arabic star compass" />;

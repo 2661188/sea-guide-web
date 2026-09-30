@@ -37,7 +37,7 @@ stored in this repository. Add it once as repository secrets:
 
 | Name | Value |
 |---|---|
-| `BAHRNA_KEYSTORE_BASE64` | the long text from `bahrna-upload-key.base64.txt` |
+| `BAHRNA_KEYSTORE_BASE64` | the long text block in `bahrna-upload-key-SECRETS.txt` (on your PC, folder `upload-key-KEEP-PRIVATE`) |
 | `BAHRNA_KEYSTORE_PASSWORD` | the password |
 | `BAHRNA_KEY_ALIAS` | `bahrna-upload` |
 | `BAHRNA_KEY_PASSWORD` | the same password |
@@ -73,18 +73,50 @@ it takes days.
 Each Play upload needs a higher build number: the workflow uses the GitHub run number,
 so simply push a change (or Run workflow) and upload the new `.aab`.
 
-## 4. Data safety answers (matches the code as of v0.9 — check before submitting)
+## 4. Data safety answers (matches the code as of v0.11, 30 Sep 2026 — check before submitting)
 
-- Data collected and sent off the device:
-  - **Location → Approximate + Precise**: *only if the online AI is enabled on the
-    server* (questions the phone cannot answer are sent with position). Processed
-    ephemerally, not stored, not shared for advertising, optional, purpose "App
-    functionality". If `ANTHROPIC_API_KEY` is not set on Vercel, nothing is sent and you
-    can answer "No data collected".
-  - Voice: Bahrna does not upload audio; speech-to-text is done by the phone's speech
-    service (Google), declared in the privacy policy.
-- Encrypted in transit: Yes (HTTPS). Users can delete data: Yes (clear app data /
-  uninstall; nothing is kept on a server). No accounts.
+Checked live on 30 Sep 2026: `https://bahrna.vercel.app/api/captain` reports
+`{"enabled":false}` (no AI key on the server), so **nothing personal leaves the phone**.
+
+- **Does your app collect or share any of the required user data types? → No.**
+  Trips, GPS tracks, waypoints, catches and catch photos, boat profile (incl. registration
+  and emergency contact), fuel and maintenance logs all stay in the app's storage on the
+  phone. Forecasts are requested for the chosen *spot*, not the GPS position. Reminders and
+  alarms are local notifications (no push server). Sharing a trip or location only happens
+  when the user taps Share and picks an app — that is user-initiated, not collection.
+- Voice: Bahrna does not upload audio; speech-to-text is done by the phone's own speech
+  service (Google on Android), stated in the privacy policy.
+- Map tiles come from OpenStreetMap / Esri / OpenSeaMap / GEBCO; like any web map they see
+  the device's IP address and the map area (stated in the privacy policy).
+- **If you later switch on the online AI** (add `ANTHROPIC_API_KEY` on Vercel), change the
+  answer to: Location → Approximate + Precise location, collected, not shared, processed
+  ephemerally, optional, purpose "App functionality". Update the listing before doing so.
+- Encrypted in transit: Yes (HTTPS). Account deletion: not applicable (no accounts).
+
+## 4b. Other App content answers
+
+| Form | Answer |
+|---|---|
+| Ads | No, the app has no ads |
+| App access | All functionality is available without special access (no login) |
+| Content rating (IARC) | Category "Reference, News, or Educational" / utility. No violence, sex, language, drugs, gambling. No user-to-user interaction or sharing of location with other users. No purchases. Expected rating: Everyone / 3+ |
+| Target audience | 18 and over (boating and navigation). Not designed for children |
+| News app | No |
+| Health / Financial / Government | No |
+| Data safety | Section 4 |
+| Foreground service (location) | See section 3, step 4 — needs a short video |
+| Exact alarms | Not requested (removed on purpose) |
+| Photo & video permissions | Not requested (the catch photo uses the system picker) |
+
+## 4c. Before you press "Send for review"
+
+- The four upload-key secrets are added and the newest **Actions → Android app** run shows
+  the **Bahrna-GooglePlay** artifact (the `.aab`).
+- The device checklist from the v0.11 audit is done on a real phone/tablet: trip with
+  screen off for 30+ min, anchor alarm notification with screen off, a reminder
+  notification, microphone in Arabic and English, share sheet, dialler, catch photo.
+- The foreground-service video is recorded (start a trip → notification visible → end trip).
+- A public support email is set in Play Console.
 
 This is a guide, not legal advice — you are responsible for the declarations.
 

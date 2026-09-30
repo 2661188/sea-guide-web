@@ -328,7 +328,7 @@ export default function Navigate() {
                     <Navigation2 size={28} fill="#fff" className="shrink-0" style={{ transform: `rotate(${ret.steer - (rotation ?? 0)}deg)` }} />
                     <span className="min-w-0 flex-1">
                       <span className="block text-[11px] font-bold uppercase tracking-wider text-white/85"><House size={12} className="me-1 inline" />{t('return_title')}</span>
-                      <span className="block font-display text-xl font-semibold leading-tight tabular-nums">{fmtDist(ret.along)} {distUnit(ret.along)} · {pad3(ret.brgStart)}° · {et.ttg(retEta)}</span>
+                      <span dir="ltr" className="block text-start font-display text-xl font-semibold leading-tight tabular-nums rtl:text-end">{fmtDist(ret.along)} {distUnit(ret.along)} · {pad3(ret.brgStart)}° · {et.ttg(retEta)}</span>
                     </span>
                   </button>
                 )}
@@ -337,7 +337,7 @@ export default function Navigate() {
                     <Navigation2 size={28} fill="#fff" className="shrink-0" style={{ transform: `rotate(${bearing(pos!, activeTarget) - (rotation ?? 0)}deg)` }} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[11px] font-bold uppercase tracking-wider text-white/85"><Flag size={12} className="me-1 inline" />{activeTarget.name || t('destination')}</span>
-                      <span className="block font-display text-xl font-semibold leading-tight tabular-nums">{fmtDist(distanceNm(pos!, activeTarget))} {distUnit(distanceNm(pos!, activeTarget))} · {pad3(bearing(pos!, activeTarget))}° · {gotoEta ? et.ttg(gotoEta) : '—'}</span>
+                      <span dir="ltr" className="block text-start font-display text-xl font-semibold leading-tight tabular-nums rtl:text-end">{fmtDist(distanceNm(pos!, activeTarget))} {distUnit(distanceNm(pos!, activeTarget))} · {pad3(bearing(pos!, activeTarget))}° · {gotoEta ? et.ttg(gotoEta) : '—'}</span>
                     </span>
                   </button>
                 )}
