@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Lightbulb, Minus, Phone, Plus, X } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
 import { SectionTitle, SourceTag } from '@/components/ui';
@@ -109,13 +109,12 @@ function LearnSheet({ item, onClose }: { item: LearnItem; onClose: () => void })
           <button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full hover:bg-slate-100 dark:hover:bg-white/10" aria-label={t('close')}><X size={20} /></button>
         </div>
         <div className="px-5 pb-6">
-          {item.image ? (
+          {item.Full ? (
             <>
-              <button onClick={() => setZoom(true)} aria-label={t('lr_tap_zoom')} className="tap block w-full overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200 dark:ring-white/10">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={item.image.src} alt={item.title[lang]} width={item.image.w} height={item.image.h} className="h-auto w-full" />
+              <button onClick={() => setZoom(true)} aria-label={t('lr_tap_zoom')} className="tap block aspect-square w-full overflow-hidden rounded-2xl ring-1 ring-slate-200 dark:ring-white/10">
+                <item.Full />
               </button>
-              <p className="muted mt-1.5 flex items-center justify-between gap-2 text-[11px]"><span>{t('lr_tap_zoom')}</span>{item.image.credit && <span className="text-end">{item.image.credit[lang]}</span>}</p>
+              <p className="muted mt-1.5 text-[11px]">{t('lr_tap_zoom')}</p>
             </>
           ) : <div className="overflow-hidden rounded-2xl ring-1 ring-slate-200 dark:ring-white/10"><item.Art /></div>}
           <p className="mt-3 text-sm"><span className="font-semibold">{t('use_for')}: </span>{item.use[lang]}</p>
@@ -133,13 +132,13 @@ function LearnSheet({ item, onClose }: { item: LearnItem; onClose: () => void })
           </p>
         </div>
       </div>
-      {zoom && item.image && <ZoomViewer src={item.image.src} alt={item.title[lang]} onClose={() => setZoom(false)} />}
+      {zoom && item.Full && <ZoomViewer alt={item.title[lang]} onClose={() => setZoom(false)}><item.Full /></ZoomViewer>}
     </div>
   );
 }
 
 /** Full-screen picture with zoom buttons; drag/scroll to move around. */
-function ZoomViewer({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+function ZoomViewer({ alt, onClose, children }: { alt: string; onClose: () => void; children: ReactNode }) {
   const { t } = useT();
   const [k, setK] = useState(1);
   useEffect(() => {
@@ -147,12 +146,18 @@ function ZoomViewer({ src, alt, onClose }: { src: string; alt: string; onClose: 
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
+  // Keep the centre of the drawing in view when zooming in or out.
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = box.current; if (!el) return;
+    el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
+    el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
+  }, [k]);
   const btn = 'tap grid h-12 w-12 place-items-center rounded-full bg-white/90 text-abyss shadow-lg';
   return (
-    <div className="fixed inset-0 z-[70] bg-black/90" role="dialog" aria-modal="true" aria-label={alt}>
-      <div className="h-full w-full overflow-auto" dir="ltr">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt={alt} style={{ width: `${k * 100}%`, maxWidth: 'none' }} className="mx-auto h-auto" />
+    <div className="fixed inset-0 z-[70] bg-[#05121C]" role="dialog" aria-modal="true" aria-label={alt}>
+      <div ref={box} className="h-full w-full overflow-auto" dir="ltr">
+        <div style={{ width: `${k * 100}vmin`, height: `${k * 100}vmin` }} className="mx-auto mt-16">{children}</div>
       </div>
       <div className="pt-safe absolute end-3 top-3 flex gap-2">
         <button onClick={() => setK((v) => Math.max(1, v / 1.5))} disabled={k <= 1} aria-label={t('zoom_out')} className={`${btn} disabled:opacity-40`}><Minus size={22} /></button>

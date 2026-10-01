@@ -2,6 +2,14 @@
 // General good practice for recreational boaters; not a substitute for a course.
 import type { ComponentType } from 'react';
 import * as Art from '@/components/LearnArt';
+import { createElement } from 'react';
+import { DururWheel } from '@/components/heritage/DururWheel';
+import { StarCompass } from '@/components/heritage/StarCompass';
+
+const DururThumb = () => createElement(DururWheel, { showToday: false, compact: true });
+const DururFull = () => createElement(DururWheel, { showToday: true });
+const CompassThumb = () => createElement(StarCompass, { compact: true });
+const CompassFull = () => createElement(StarCompass, {});
 
 type T = { en: string; ar: string };
 export type LearnCat = 'fishing_knots' | 'boat_knots' | 'anchoring' | 'docking' | 'mooring' | 'navigation' | 'launching' | 'recovery' | 'safety' | 'heritage';
@@ -14,8 +22,8 @@ export interface LearnItem {
   steps: T[];
   tip: T;
   Art: ComponentType;
-  /** Full reference picture shown in the lesson (tap to zoom). */
-  image?: { src: string; w: number; h: number; credit?: T };
+  /** Large drawing shown in the lesson instead of Art (tap to zoom). */
+  Full?: ComponentType;
 }
 
 export const CATS: { id: LearnCat; title: T }[] = [
@@ -347,28 +355,26 @@ export const LEARN: LearnItem[] = [
     tip: { en: 'Operating a VHF may require a licence — check UAE requirements.', ar: 'قد يتطلب تشغيل جهاز VHF ترخيصاً — تحقق من متطلبات الإمارات.' },
   },
   {
-    id: 'durur', cat: 'heritage', level: 'easy', Art: Art.DururThumb,
-    image: { src: '/learn/durur.jpg', w: 1800, h: 2637, credit: { en: 'Chart: Sheikh Zayed Grand Mosque Center (szgmc.gov.ae)', ar: 'الصورة: مركز جامع الشيخ زايد الكبير (szgmc.gov.ae)' } },
+    id: 'durur', cat: 'heritage', level: 'easy', Art: DururThumb, Full: DururFull,
     title: { en: 'Al Durur calendar', ar: 'ديرة الدرور' },
     use: { en: 'The traditional Emirati calendar of seasons, winds and sea, counted in tens of days from the rising of Suhail.', ar: 'التقويم الإماراتي التقليدي للمواسم والرياح والبحر، يُحسب بالعشرات من طلوع سهيل.' },
     steps: [
-      { en: 'The count starts with the rising of Suhail (Canopus) in mid-August. Days are counted in tens — each ten days is a "dar": the tens, twenties, thirties… up to the hundred.', ar: 'يبدأ الحساب بطلوع سهيل في منتصف أغسطس. تُعدّ الأيام بالعشرات — كل عشرة أيام «در»: العشر، العشرين، الثلاثين… حتى المئة.' },
-      { en: 'Every hundred days is a season (inner ring): Safri (autumn), Shita (winter), Seif (spring) and Qaith (summer).', ar: 'كل مئة يوم موسم (الحلقة الداخلية): الصفري (الخريف)، الشتاء، الصيف (الربيع)، والقيظ (الصيف).' },
-      { en: 'The middle rings show the star seasons (such as Al Thuraya, Al Jawza, Al Mirzam) and known winds — for example Al Bawarih and Al Simoom in summer, Al Kaws, and the Ahaimar in late autumn.', ar: 'الحلقات الوسطى تبيّن مواسم النجوم (مثل الثريا والجوزاء والمرزم) والرياح المعروفة — مثل البوارح والسموم في الصيف، والكوس، وضربة الأحيمر آخر الخريف.' },
-      { en: 'The outer ring gives the Gregorian dates and icons for what to expect: heat or cold, rain, humidity, dusty winds and rough seas.', ar: 'الحلقة الخارجية فيها التاريخ الميلادي ورموز لما يُتوقع: حر أو برد، مطر، رطوبة، رياح مغبرة، وبحر مضطرب.' },
-      { en: 'Tap the picture to open it full size and zoom.', ar: 'اضغط على الصورة لفتحها بالحجم الكامل والتكبير.' },
+      { en: 'The count starts with the rising of Suhail (Canopus) on 15 August — the red mark at the top. Days are counted in tens; each ten days is a "dar": the tens, twenties, thirties… up to the hundred.', ar: 'يبدأ الحساب بطلوع سهيل في 15 أغسطس — العلامة الحمراء في الأعلى. تُعدّ الأيام بالعشرات؛ كل عشرة أيام «در»: العشر، العشرين، الثلاثين… حتى المية.' },
+      { en: 'Inner ring — the seasons: Safri (autumn, 100 days), Shita (winter, 100), Seif (spring, 100) and Qaith (summer, 60 days plus 5 days of "Al Masariq").', ar: 'الحلقة الداخلية — المواسم: الصفري (الخريف، 100 يوم)، الشتاء (100)، الصيف (الربيع، 100)، والقيظ (الصيف، 60 يوماً و5 أيام «المسارق»).' },
+      { en: 'Middle ring — each dar of the season, read clockwise.', ar: 'الحلقة الوسطى — دُرور كل موسم، تُقرأ مع عقارب الساعة.' },
+      { en: 'Outer rings — well-known periods such as Al Wasm, Al Murabbaniya (the cold forty days), Kannat Al Thuraya and the Bawarih winds, and the Gregorian months.', ar: 'الحلقات الخارجية — فترات معروفة مثل الوسم، والمربعانية (أربعين البرد)، وكنة الثريا، ورياح البوارح، والأشهر الميلادية.' },
+      { en: 'The needle and the centre show where today falls. Tap the drawing to zoom.', ar: 'المؤشر والوسط يبيّنان موقع اليوم. اضغط على الرسم للتكبير.' },
     ],
-    tip: { en: 'This is heritage knowledge that describes typical seasons, not a forecast. Always check today\'s forecast in Bahrna and the NCM before going out.', ar: 'هذه معرفة تراثية تصف المواسم المعتادة وليست توقعات. راجع دائماً توقعات اليوم في بحرنا والمركز الوطني للأرصاد قبل الخروج.' },
+    tip: { en: 'Drawn by Bahrna from the traditional count; period dates are approximate and vary between sources. This is heritage knowledge that describes typical seasons, not a forecast. Always check today\'s forecast in Bahrna and the NCM before going out.', ar: 'رسم بحرنا وفق الحساب التقليدي؛ تواريخ الفترات تقريبية وتختلف بين المصادر. هذه معرفة تراثية تصف المواسم المعتادة وليست توقعات. راجع دائماً توقعات اليوم في بحرنا والمركز الوطني للأرصاد قبل الخروج.' },
   },
   {
-    id: 'star_compass', cat: 'heritage', level: 'med', Art: Art.StarCompassThumb,
-    image: { src: '/learn/star-compass.jpg', w: 1295, h: 1215 },
+    id: 'star_compass', cat: 'heritage', level: 'med', Art: CompassThumb, Full: CompassFull,
     title: { en: 'Arabic star compass', ar: 'بوصلة النجوم العربية' },
     use: { en: 'How Gulf seafarers named directions by the stars before modern compasses and GPS.', ar: 'كيف سمّى بحّارة الخليج الاتجاهات بالنجوم قبل البوصلة الحديثة والـ GPS.' },
     steps: [
       { en: 'Each direction is named after the point on the horizon where a bright star rises ("Matla\'") or sets ("Magheeb").', ar: 'كل اتجاه يُسمّى بالنقطة على الأفق التي يطلع منها نجم لامع («مطلع») أو يغيب فيها («مغيب»).' },
-      { en: 'The four main points on this chart: Al Yah at the top (north), Matla\' (east), Qutb at the bottom (south) and Magheeb (west).', ar: 'النقاط الأربع الرئيسية في الصورة: الياه في الأعلى (الشمال)، المطلع (الشرق)، القطب في الأسفل (الجنوب)، والمغيب (الغرب).' },
-      { en: 'Between them, every 15° has a star name — for example Matla\' Al Aiyuq near 45°, Matla\' Al Aqrab near 135°, and the matching "Magheeb" names on the western side (Magheeb Al Aqrab near 225°, Magheeb Al Aiyuq near 315°).', ar: 'بينها، كل 15 درجة لها اسم نجم — مثل مطلع العيوق عند 45° تقريباً، ومطلع العقرب عند 135°، وأسماء «المغيب» المقابلة في جهة الغرب (مغيب العقرب عند 225°، ومغيب العيوق عند 315°).' },
+      { en: 'The circle has 32 directions, one every 11.25°: Al Yah at the top (north, the Pole Star), Matla\' (east), Qutb at the bottom (south) and Magheeb (west).', ar: 'الدائرة فيها 32 اتجاهاً، كل 11.25 درجة: الياه في الأعلى (الشمال، نجم القطب)، المطلع (الشرق)، القطب في الأسفل (الجنوب)، والمغيب (الغرب).' },
+      { en: 'East of north are the rising points (Matla\' Al Fard, Al Na\'sh, Al Naqa, Al Ayyuq at 45° … Al Aqrab at 135° … Suhail, Al Sulbar); the west side has the same stars\' setting points (Magheeb Al Aqrab at 225°, Magheeb Al Ayyuq at 315°).', ar: 'شرق الشمال نقاط المطلع (مطلع الفرد، النعش، الناقة، العيوق عند 45° … العقرب عند 135° … سهيل، السلبار)؛ وفي الغرب نقاط مغيب نفس النجوم (مغيب العقرب عند 225°، ومغيب العيوق عند 315°).' },
       { en: 'A course was given as a star point: "steer on Matla\' Al Aqrab" means roughly 135°.', ar: 'كان الاتجاه يُعطى باسم النجم: «سِر على مطلع العقرب» يعني تقريباً 135°.' },
       { en: 'Bahrna shows bearings in degrees from true north on the same 360° circle, so you can compare them with the traditional names.', ar: 'بحرنا يعرض الاتجاهات بالدرجات من الشمال الحقيقي على نفس الدائرة 360°، فتقدر تقارنها بالأسماء التقليدية.' },
     ],
