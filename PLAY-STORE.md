@@ -48,27 +48,41 @@ it takes days.
 
 ## 3. Google Play Console (you do these steps)
 
-1. Create a developer account at play.google.com/console (one-time fee, identity check).
-   New personal accounts must run a **closed test with at least 12 testers for 14 days**
-   before production.
-2. **Create app** → name "Bahrna – بحرنا", default language English, App, Free.
-3. **Testing → Closed testing → Create track** → upload the `.aab` → add testers' emails.
-4. **App content** (each is a short form):
-   - Privacy policy URL: `https://bahrna.vercel.app/privacy`
-   - Ads: No ads.
-   - App access: all features available without login.
-   - Content rating questionnaire: reference app, no user-generated content.
-   - Target audience: 18+ (or 13+), not designed for children.
-   - Data safety: see section 4.
-   - **Foreground service permission (location)**: explain "Records the user's boat
-     trip and gives return-to-start / route guidance / anchor-drag alarm while the
-     screen is off. Starts only when the user starts a trip, route guidance or anchor
-     alarm; stops when they end it." Attach a short screen recording of starting a
-     trip and the notification.
-   - Health / financial / government: not applicable.
-5. **Store listing**: texts in `store/listing.md`, icon 512×512, feature graphic
-   1024×500, at least 2 phone screenshots.
-6. After 14 days of closed testing: **Apply for production** → release.
+You already have a Play Console developer account (it publishes *Little Safety Heroes*),
+so there is no new account, fee or identity check. Bahrna is added as a **second app in
+the same account**.
+
+1. **Get the bundle (.aab).** Add the four secrets in section 2, then **Actions → Android
+   app → Run workflow**. When the run is green open it → **Artifacts → Bahrna-GooglePlay**
+   → download the zip and take out `Bahrna-…-GooglePlay.aab`.
+2. **Create app** (Play Console home → *Create app*): name `Bahrna – بحرنا`, default
+   language English (United States) – en-US, App, Free. Tick the two declarations.
+3. **Dashboard → "Set up your app"** — fill each form with section 4 / 4b:
+   privacy policy `https://bahrna.vercel.app/privacy`, app access (no login), ads (no),
+   content rating, target audience (18+), news (no), data safety (no data collected),
+   government / financial / health (no). Category: *Maps & Navigation*; contact email.
+4. **Store listing** (Grow → Store presence → Main store listing): texts from
+   `store/listing.md`; icon `icon-512.png`; feature graphic; phone screenshots
+   (`screenshots/phone-en`), 7-inch and 10-inch tablet (`screenshots/tablet-en`). Then
+   **Add translation → Arabic** and use the Arabic texts, `feature-graphic-ar.png` and the
+   `-ar` screenshots.
+5. **Internal testing first** (Test and release → Testing → Internal testing → Create
+   release): upload the `.aab`, accept Play App Signing, add yourself as tester, roll out.
+   Install from the opt-in link and run the device checklist in 4c.
+6. **Closed testing.** Look at the app's Dashboard: if it shows *"Run a closed test with at
+   least 12 testers for 14 days"* (personal accounts created after 13 Nov 2023 must do this
+   for each app — you will remember it from Little Safety Heroes), create a closed track,
+   upload the same `.aab`, add a Google Group or e-mail list of 12+ testers and keep them
+   opted in for 14 days in a row. If the Dashboard does not show it, skip to step 7.
+7. **Foreground service declaration** (App content → Foreground service permissions →
+   Location): paste the text below and the link to a short video (unlisted YouTube or Drive).
+8. **Apply for production / Create production release**: upload the newest `.aab`, add the
+   release notes from `store/listing.md`, countries (UAE + Gulf, or all), **Send for review**.
+   First reviews usually take from a few days up to about a week.
+
+Foreground-service text: "Records the user's boat trip and gives return-to-start / route
+guidance / anchor-drag alarm while the screen is off. Starts only when the user starts a
+trip, route guidance or anchor alarm; stops when they end it."
 
 Each Play upload needs a higher build number: the workflow uses the GitHub run number,
 so simply push a change (or Run workflow) and upload the new `.aab`.
