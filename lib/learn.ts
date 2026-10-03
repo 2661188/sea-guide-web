@@ -26,7 +26,10 @@ export interface LearnItem {
   Full?: ComponentType;
 }
 
-export const CATS: { id: LearnCat; title: T }[] = [
+/** Sea heritage lessons (Durur calendar, star compass) are kept for version 2 but hidden for now. */
+export const HERITAGE_ENABLED = false;
+
+const ALL_CATS: { id: LearnCat; title: T }[] = [
   { id: 'boat_knots', title: { en: 'Boating knots', ar: 'عقد القوارب' } },
   { id: 'fishing_knots', title: { en: 'Fishing knots', ar: 'عقد الصيد' } },
   { id: 'anchoring', title: { en: 'Anchoring', ar: 'الإرساء' } },
@@ -39,7 +42,7 @@ export const CATS: { id: LearnCat; title: T }[] = [
   { id: 'heritage', title: { en: 'Sea heritage', ar: 'التراث البحري' } },
 ];
 
-export const LEARN: LearnItem[] = [
+const ALL_LEARN: LearnItem[] = [
   {
     id: 'cleat', cat: 'boat_knots', level: 'easy', Art: Art.CleatHitch,
     title: { en: 'Cleat hitch', ar: 'عقدة المربط' },
@@ -381,3 +384,6 @@ export const LEARN: LearnItem[] = [
     tip: { en: 'Heritage reference only. For navigation use GPS bearings, official charts and a lookout.', ar: 'مرجع تراثي فقط. في الملاحة اعتمد على اتجاهات GPS والخرائط الرسمية والمراقبة.' },
   },
 ];
+
+export const CATS = ALL_CATS.filter((c) => HERITAGE_ENABLED || c.id !== 'heritage');
+export const LEARN = ALL_LEARN.filter((i) => HERITAGE_ENABLED || i.cat !== 'heritage');

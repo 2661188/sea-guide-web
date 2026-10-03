@@ -8,7 +8,7 @@ import { WindExplorer } from '@/components/WindExplorer';
 import { FishingToday } from '@/components/FishingToday';
 import { HourStrip, SportsDonut, TideTable, WeekOutlook } from '@/components/Dashboard';
 import { WeatherBoardSection } from '@/components/WeatherBoard';
-import { AskCard, ComingUpCard, NavStatusCard, SafetyMaintRow } from '@/components/HomeCards';
+import { ComingUpCard, NavStatusCard, SafetyMaintRow } from '@/components/HomeCards';
 import { ActivityIcon } from '@/components/ActivityIcon';
 import { ErrorState, LoadingScreen, OfflineBanner, SectionTitle, SourceTag, toneDot, toneText, Val } from '@/components/ui';
 import { useSpot } from '@/lib/SpotContext';
@@ -137,9 +137,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* ASK BAHRNA · COMING UP · NAVIGATION STATUS */}
-            <div className="grid gap-3 md:grid-cols-3 lg:gap-4">
-              <AskCard />
+            {/* COMING UP · NAVIGATION STATUS (Ask Bahrna is the floating button on every page) */}
+            <div className="grid gap-3 md:grid-cols-2 lg:gap-4">
               <ComingUpCard data={data} i={v.i} />
               <NavStatusCard />
             </div>
