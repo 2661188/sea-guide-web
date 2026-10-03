@@ -3,7 +3,7 @@
  * - Pages: network first (3 s), then the saved copy, so updates arrive when online.
  * - Built files (/_next/static): cache first (they never change once built).
  * - API calls and map tiles are NOT handled here (the app caches those itself). */
-const SHELL = 'bahrna-shell-v2';
+const SHELL = 'bahrna-shell-v3';
 const PAGES = ['/', '/navigate', '/safety', '/trips', '/fishing', '/learn', '/settings', '/map'];
 
 async function precache() {

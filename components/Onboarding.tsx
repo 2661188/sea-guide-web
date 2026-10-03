@@ -3,6 +3,7 @@ import { Compass, Fish, ListChecks, Waves, Wind } from 'lucide-react';
 import { useT } from '@/lib/i18n/LangContext';
 import type { Key } from '@/lib/i18n/strings';
 import { load, save } from '@/lib/storage';
+import { DHOW_MARK } from '@/lib/brand';
 
 const SLIDES: { h?: Key; t: Key; icon: React.ReactNode }[] = [
   { t: 'ob1_t', icon: null },
@@ -37,15 +38,12 @@ export function Onboarding() {
       <div key={i} className="animate-rise flex flex-1 flex-col items-center justify-center px-8 text-center">
         {i === 0 ? (
           <>
-            <svg viewBox="0 0 120 120" className="h-28 w-28" aria-hidden="true">
-              <circle cx="60" cy="60" r="56" fill="rgba(255,255,255,.06)" stroke="rgba(127,212,208,.4)" strokeWidth="1.5" />
-              <circle cx="82" cy="40" r="9" fill="#FF6B35" />
-              <path d="M16 70c11 0 11-8 22-8s11 8 22 8 11-8 22-8 11 8 22 8" stroke="#7FD4D0" strokeWidth="6" fill="none" strokeLinecap="round">
-                <animateTransform attributeName="transform" type="translate" values="0 0;-6 0;0 0" dur="3s" repeatCount="indefinite" />
-              </path>
-              <path d="M16 88c11 0 11-8 22-8s11 8 22 8 11-8 22-8 11 8 22 8" stroke="#E0F2FE" strokeWidth="6" fill="none" strokeLinecap="round">
-                <animateTransform attributeName="transform" type="translate" values="0 0;6 0;0 0" dur="3s" repeatCount="indefinite" />
-              </path>
+            <svg viewBox="0 0 512 512" className="h-28 w-28" aria-hidden="true">
+              <circle cx="256" cy="256" r="240" fill="rgba(255,255,255,.06)" stroke="rgba(127,212,208,.4)" strokeWidth="6" />
+              <g transform="translate(26 -14) scale(0.9)">
+                <g dangerouslySetInnerHTML={{ __html: DHOW_MARK }} />
+                <animateTransform attributeName="transform" type="translate" additive="sum" values="0 0;0 -6;0 0" dur="3s" repeatCount="indefinite" />
+              </g>
             </svg>
             <h1 className="mt-6 font-display text-6xl font-bold tracking-tight">BAHRNA</h1>
             <p lang="ar" className="mt-1 text-4xl font-bold text-shallows">بحرنا</p>
