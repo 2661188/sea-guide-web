@@ -76,6 +76,130 @@ jobs:
           BAHRNA_KEY_PASSWORD: ${{ secrets.BAHRNA_KEY_PASSWORD }}
         run: gradle bundleRelease assembleRelease --no-daemon --stacktrace
 
+      - name: Build unsigned Google Play bundle (no upload key on GitHub)
+        if: env.HAS_UPLOAD_KEY != 'true'
+        working-directory: android
+        run: gradle bundleRelease --no-daemon --stacktrace
+
+      - name: Collect files
+        id: out
+        run: |
+          V=$(node -p "require('./package.json').version")
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/Bahrna-Test-$V-build$VERSION_CODE.apk"
+          if [ "$HAS_UPLOAD_KEY" = "true" ]; then
+            cp android/app/build/outputs/bundle/release/app-release.aab "dist/Bahrna-$V-build$VERSION_CODE-GooglePlay.aab"
+            cp android/app/build/outputs/apk/release/app-release.apk "dist/Bahrna-$V-build$VERSION_CODE.apk"
+          else
+            # No upload key on GitHub: publish an UNSIGNED bundle; it is signed on the owner's side.
+            cp android/app/build/outputs/bundle/release/app-release.aab "dist/Bahrna-$V-build$VERSION_CODE-unsigned.aab"
+          fi
+          rm -f "$RUNNER_TEMP/upload.jks"
+          ls -la dist
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bahrna-Test-APK
+          path: dist/Bahrna-Test-*.apk
+
+      - name: Upload Google Play files
+        if: env.HAS_UPLOAD_KEY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bahrna-GooglePlay
+          path: |
+            dist/*GooglePlay.aab
+            dist/Bahrna-${{ steps.out.outputs.version }}-build*.apk
+
+      - name: Publish "Latest test build" (download link for your phone)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete test-latest --yes --cleanup-tag || true
+          gh release create test-latest dist/Bahrna-Test-*.apk $(ls dist/*-unsigned.aab 2>/dev/null) \
+            --prerelease --target "$GITHUB_SHA" \
+            --title "Latest test build (v${{ steps.out.outputs.version }}, build ${VERSION_CODE})" \
+            --notes "Test build of Bahrna for Android, made automatically from the latest code. Open this page on your Android phone, tap the .apk file to download it, then open it to install (allow 'Install unknown apps' for your browser when asked). This is a TEST app for trying Bahrna before it is on Google Play. Bahrna is a planning and awareness aid: it does not replace certified marine navigation equipment."
+# Builds the Bahrna Android app on GitHub's servers (they have the Android SDK and
+# Google's Maven repositories). Runs on every push to main, or by hand from the
+# Actions tab ("Run workflow").
+#
+# Always produces:  the TEST app (Bahrna Test) — an APK you can install on your phone.
+#                   It is also attached to the "Latest test build" release so you can
+#                   download it straight from your phone's browser.
+# When the upload key secrets are set (see PLAY-STORE.md): the Google Play bundle (.aab)
+#                   and a release APK, signed with your upload key.
+name: Android app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # to update the "Latest test build" release
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      VERSION_CODE: ${{ github.run_number }}
+      HAS_UPLOAD_KEY: ${{ secrets.BAHRNA_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Build the app pages (bundled inside the APK)
+        run: npm run build:app
+
+      - name: Copy pages and plugins into the Android project
+        run: npx -y @capacitor/cli@8.5.2 sync android
+
+      - name: Make app icons and splash screens
+        run: npm run android:icons
+
+      - name: Build test APK
+        working-directory: android
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Prepare upload key
+        if: env.HAS_UPLOAD_KEY == 'true'
+        env:
+          KEYSTORE_B64: ${{ secrets.BAHRNA_KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+
+      - name: Build Google Play bundle + release APK
+        if: env.HAS_UPLOAD_KEY == 'true'
+        working-directory: android
+        env:
+          BAHRNA_KEYSTORE_FILE: ${{ runner.temp }}/upload.jks
+          BAHRNA_KEYSTORE_PASSWORD: ${{ secrets.BAHRNA_KEYSTORE_PASSWORD }}
+          BAHRNA_KEY_ALIAS: ${{ secrets.BAHRNA_KEY_ALIAS }}
+          BAHRNA_KEY_PASSWORD: ${{ secrets.BAHRNA_KEY_PASSWORD }}
+        run: gradle bundleRelease assembleRelease --no-daemon --stacktrace
+
       - name: Collect files
         id: out
         run: |
