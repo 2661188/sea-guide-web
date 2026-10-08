@@ -1,0 +1,124 @@
+# Builds the Bahrna iPhone app on GitHub's Mac servers (no Mac needed).
+# Runs on every push to main, or by hand from the Actions tab ("Run workflow").
+#
+# Without the Apple secrets: only checks that the iPhone app compiles (simulator build).
+# With the 4 Apple secrets (see APP-STORE.md): signs the app with Apple's cloud signing
+#   and uploads it to App Store Connect. It appears in TestFlight after Apple's
+#   processing (10-30 minutes), ready for testing and for App Store review.
+#
+#   APPLE_TEAM_ID   10-character Team ID (developer.apple.com > Account > Membership)
+#   ASC_KEY_ID      App Store Connect API key ID  (Users and Access > Integrations)
+#   ASC_ISSUER_ID   Issuer ID shown above the keys list
+#   ASC_KEY_P8      the whole text of the downloaded AuthKey_XXXX.p8 file
+name: iOS app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      HAS_APPLE_KEY: ${{ secrets.ASC_KEY_P8 != '' && secrets.ASC_KEY_ID != '' && secrets.ASC_ISSUER_ID != '' && secrets.APPLE_TEAM_ID != '' }}
+      # build number: grows with every run (re-runs get a new one too)
+      BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Build the app pages (bundled inside the app)
+        run: npm run build:app
+
+      - name: Make the iPhone project
+        run: npx -y @capacitor/cli@8.5.2 add ios --packagemanager CocoaPods
+
+      - name: Make app icon and splash screen
+        run: npm run ios:icons
+
+      - name: iPhone settings (permissions, background location, privacy manifest)
+        run: node scripts/ios-setup.mjs
+
+      - name: Copy pages and plugins into the iPhone project
+        run: npx -y @capacitor/cli@8.5.2 sync ios
+
+      - name: Check the app compiles (no Apple key on GitHub)
+        if: env.HAS_APPLE_KEY != 'true'
+        working-directory: ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -n 40
+          exit ${PIPESTATUS[0]}
+
+      - name: Prepare Apple key
+        if: env.HAS_APPLE_KEY == 'true'
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          grep -q "BEGIN PRIVATE KEY" "$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8" || { echo "ASC_KEY_P8 must be the whole .p8 text, including the BEGIN/END lines"; exit 1; }
+
+      - name: Build for the App Store
+        if: env.HAS_APPLE_KEY == 'true'
+        working-directory: ios/App
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          V=$(node -p "require('../../package.json').version")
+          set -o pipefail
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Bahrna.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic CODE_SIGNING_ALLOWED=NO \
+            MARKETING_VERSION="$V" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            archive | tail -n 60
+          # Signing happens in the next step: Apple's cloud signing with the API key
+          # (App Store certificate + profile are made automatically, no devices needed).
+
+      - name: Sign and upload to App Store Connect (TestFlight)
+        if: env.HAS_APPLE_KEY == 'true'
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          EOF
+          set -o pipefail
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Bahrna.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" | tail -n 60
+          echo "Uploaded build $BUILD_NUMBER. It shows in App Store Connect > TestFlight after Apple's processing."
+
+      - name: Remove Apple key
+        if: always()
+        run: rm -f "$RUNNER_TEMP"/AuthKey_*.p8
