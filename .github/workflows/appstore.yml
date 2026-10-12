@@ -1,0 +1,33 @@
+# Fills the App Store page through Apple's API (texts EN/AR, screenshots, age rating,
+# price, review notes, build). Run by hand from the Actions tab. Tick "submit" to also
+# send the version to App Review.
+name: App Store page
+
+on:
+  workflow_dispatch:
+    inputs:
+      submit:
+        description: "Also submit for App Review"
+        type: boolean
+        default: false
+
+jobs:
+  page:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyjwt==2.9.0 cryptography==43.0.1 requests==2.32.3
+      - name: Fill the App Store page
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/key.p8"
+          export ASC_KEY_FILE="$RUNNER_TEMP/key.p8"
+          python store/AppStore/gh/asc.py ${{ inputs.submit && '--submit' || '' }}
+          rm -f "$RUNNER_TEMP/key.p8"
