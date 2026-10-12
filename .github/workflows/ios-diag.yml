@@ -1,0 +1,97 @@
+# Diagnostic run (by hand only): builds the iPhone app for the iOS Simulator, opens a
+# small test page inside the app that calls the native plugins (GPS, speech, voice)
+# and prints what happens. Used to debug native features without a Mac.
+name: iOS diagnostics
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diag:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run build:app
+      - run: npx -y @capacitor/cli@8.5.2 add ios --packagemanager CocoaPods
+      - run: node scripts/ios-setup.mjs
+      - run: npx -y @capacitor/cli@8.5.2 sync ios
+
+      - name: Add test page and open it at launch
+        run: |
+          cat > ios/App/App/public/diag.html <<'EOF'
+          <!doctype html><html><body style="font:14px sans-serif;padding:40px 12px"><h3>Bahrna diag</h3><pre id="o"></pre>
+          <script>
+          const o=document.getElementById('o');
+          const log=(...a)=>{const s=a.map(x=>typeof x==='string'?x:JSON.stringify(x)).join(' ');console.log('DIAG '+s);o.textContent+=s+'\n';};
+          const t=(p,ms)=>Promise.race([p,new Promise(r=>setTimeout(()=>r('TIMEOUT'),ms))]);
+          setTimeout(async()=>{
+            const C=window.Capacitor;
+            log('hasCapacitor',!!C);
+            if(!C)return;
+            log('isNative',C.isNativePlatform&&C.isNativePlatform(),'platform',C.getPlatform&&C.getPlatform());
+            log('nativePromise',typeof C.nativePromise,'nativeCallback',typeof C.nativeCallback);
+            log('headers',(C.PluginHeaders||[]).map(h=>h.name+':'+(h.methods||[]).map(m=>m.name).join('|')));
+            const P=(pl,m,o)=>{try{return t(C.nativePromise(pl,m,o||{}),6000)}catch(e){return Promise.resolve('THROW '+e)}};
+            log('speech.available',await P('SpeechRecognition','available').catch(e=>'ERR '+e));
+            log('speech.checkPermissions',await P('SpeechRecognition','checkPermissions').catch(e=>'ERR '+e));
+            log('tts.getSupportedLanguages',await P('TextToSpeech','getSupportedLanguages').then(r=>r&&r.languages?r.languages.length:r).catch(e=>'ERR '+e));
+            log('app.getInfo',await P('App','getInfo').catch(e=>'ERR '+e));
+            try{const id=C.nativeCallback('BackgroundGeolocation','addWatcher',{requestPermissions:true,stale:true,distanceFilter:0},(r,e)=>log('geo.callback',r,e));log('geo.addWatcher id',id);}catch(e){log('geo THROW',String(e));}
+            setTimeout(()=>log('done'),20000);
+          },2000);
+          </script></body></html>
+          EOF
+          node -e "const f='ios/App/App/capacitor.config.json';const c=require('./'+f);c.server=Object.assign({},c.server,{appStartPath:'/diag.html'});c.loggingBehavior='debug';require('fs').writeFileSync(f,JSON.stringify(c,null,2));console.log(JSON.stringify(c.packageClassList))"
+
+      - name: Build for the Simulator
+        working-directory: ios/App
+        run: |
+          set -o pipefail
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO build | tail -n 15
+
+      - name: Run in the Simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const d=JSON.parse(s).devices;for(const k of Object.keys(d).reverse()){if(!k.includes('iOS'))continue;const x=d[k].find(v=>/^iPhone/.test(v.name));if(x){console.log(x.udid);return}}})")
+          echo "Simulator $UDID"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          APP=$(ls -d "$RUNNER_TEMP"/dd/Build/Products/Debug-iphonesimulator/*.app | head -1)
+          echo "App $APP"; ls "$APP" | head -30
+          plutil -p "$APP/Info.plist" | grep -E "NSLocation|NSMicro|NSSpeech|UIBackground" || true
+          cat "$APP/capacitor.config.json" | head -60
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl location "$UDID" set 25.2048,55.2708 || true
+          xcrun simctl launch --console-pty "$UDID" ae.bahrna.app > "$RUNNER_TEMP/app.log" 2>&1 &
+          sleep 35
+          xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/shot1.png" || true
+          xcrun simctl privacy "$UDID" grant location-always ae.bahrna.app || true
+          xcrun simctl privacy "$UDID" grant microphone ae.bahrna.app || true
+          xcrun simctl terminate "$UDID" ae.bahrna.app || true
+          sleep 2
+          xcrun simctl launch --console-pty "$UDID" ae.bahrna.app > "$RUNNER_TEMP/app2.log" 2>&1 &
+          sleep 35
+          xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/shot2.png" || true
+          echo "================ RUN 1 (no permissions granted) ================"
+          grep -aE "DIAG|⚡️|rror|Plugin|plugin" "$RUNNER_TEMP/app.log" | head -150 || true
+          echo "================ RUN 2 (location + microphone granted) ================"
+          grep -aE "DIAG|⚡️|rror|Plugin|plugin" "$RUNNER_TEMP/app2.log" | head -150 || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-diag
+          path: |
+            ${{ runner.temp }}/app.log
+            ${{ runner.temp }}/app2.log
+            ${{ runner.temp }}/shot1.png
+            ${{ runner.temp }}/shot2.png
