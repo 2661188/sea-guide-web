@@ -15,12 +15,16 @@ interface BgPlugin {
   openSettings(): Promise<void>;
 }
 
+// A Capacitor plugin object answers to every property name, including "then", so it must
+// never be awaited or returned straight from an async function: that promise never settles
+// (this froze GPS and voice inside the app). The loaders below return it inside a box.
 let plugin: BgPlugin | null = null;
-async function bg(): Promise<BgPlugin> {
-  if (plugin) return plugin;
-  const { registerPlugin } = await import('@capacitor/core');
-  plugin = registerPlugin<BgPlugin>('BackgroundGeolocation');
-  return plugin;
+async function bg(): Promise<{ p: BgPlugin }> {
+  if (!plugin) {
+    const { registerPlugin } = await import('@capacitor/core');
+    plugin = registerPlugin<BgPlugin>('BackgroundGeolocation');
+  }
+  return { p: plugin };
 }
 
 /** Start a watcher. Returns a function that stops it. */
@@ -30,7 +34,7 @@ export async function watchNative(
   onFix: (f: NativeFix) => void,
   onError: (e: NativeGpsError) => void,
 ): Promise<() => void> {
-  const p = await bg();
+  const { p } = await bg();
   const opts = background
     ? {
         backgroundTitle: lang === 'ar' ? 'بحرنا يستخدم موقعك' : 'Bahrna is using your location',
@@ -50,7 +54,7 @@ export async function watchNative(
   return () => { if (stopped) return; stopped = true; p.removeWatcher({ id }).catch(() => { /* already gone */ }); };
 }
 
-export async function openLocationSettings() { try { await (await bg()).openSettings(); } catch { /* ignore */ } }
+export async function openLocationSettings() { try { await (await bg()).p.openSettings(); } catch { /* ignore */ } }
 
 // ---- screen on ----
 export async function nativeKeepAwake(on: boolean) {

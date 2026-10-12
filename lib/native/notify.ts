@@ -8,10 +8,12 @@ import { isNative } from './platform';
 type LN = typeof import('@capacitor/local-notifications').LocalNotifications;
 let ln: LN | null = null;
 let channelReady = false;
-async function plugin(): Promise<LN> {
-  if (ln) return ln;
-  ln = (await import('@capacitor/local-notifications')).LocalNotifications;
-  return ln;
+// A Capacitor plugin object answers to every property name, including "then", so it must
+// never be awaited or returned straight from an async function: that promise never settles
+// (this froze GPS and voice inside the app). The loaders below return it inside a box.
+async function plugin(): Promise<{ p: LN }> {
+  if (!ln) ln = (await import('@capacitor/local-notifications')).LocalNotifications;
+  return { p: ln };
 }
 
 const ALARM_CHANNEL = 'bahrna-alarms';
@@ -30,7 +32,7 @@ async function ensureChannels(p: LN) {
 export async function requestNotifyPermission(): Promise<boolean> {
   try {
     if (isNative()) {
-      const p = await plugin();
+      const { p } = await plugin();
       let s = await p.checkPermissions();
       if (s.display !== 'granted') s = await p.requestPermissions();
       if (s.display === 'granted') await ensureChannels(p);
@@ -49,7 +51,7 @@ export type NotifyKind = 'alarm' | 'reminder';
 export async function notify(id: number, title: string, body: string, kind: NotifyKind = 'alarm', at?: Date): Promise<boolean> {
   try {
     if (isNative()) {
-      const p = await plugin();
+      const { p } = await plugin();
       if ((await p.checkPermissions()).display !== 'granted') return false;
       await ensureChannels(p);
       await p.schedule({ notifications: [{
@@ -72,7 +74,7 @@ export async function notify(id: number, title: string, body: string, kind: Noti
 }
 
 export async function cancelNotify(id: number) {
-  try { if (isNative()) await (await plugin()).cancel({ notifications: [{ id }] }); } catch { /* ignore */ }
+  try { if (isNative()) await (await plugin()).p.cancel({ notifications: [{ id }] }); } catch { /* ignore */ }
 }
 
 /** Stable numeric id from a string (Android needs 32-bit ints). */

@@ -6,8 +6,11 @@ import { isIOSApp } from '@/lib/native/platform';
 
 type Cb = { partial(t: string): void; final(t: string): void; error(code: string): void; end(): void };
 
-async function sr() { return (await import('@capacitor-community/speech-recognition')).SpeechRecognition; }
-async function tts() { return (await import('@capacitor-community/text-to-speech')).TextToSpeech; }
+// A Capacitor plugin object answers to every property name, including "then", so it must
+// never be awaited or returned straight from an async function: that promise never settles
+// (this froze GPS and voice inside the app). The loaders below return it inside a box.
+async function sr() { return { p: (await import('@capacitor-community/speech-recognition')).SpeechRecognition }; }
+async function tts() { return { p: (await import('@capacitor-community/text-to-speech')).TextToSpeech }; }
 
 /** Maps the Android recogniser's messages to the same codes the web recogniser uses. */
 export function mapSttError(msg: string): string {
@@ -34,10 +37,10 @@ export function nativeListen(language: string, cb: Cb, hold: boolean) {
     else if (text) cb.final(text);
     cb.end();
   };
-  let plugin: Awaited<ReturnType<typeof sr>> | null = null;
+  let plugin: Awaited<ReturnType<typeof sr>>["p"] | null = null;
   (async () => {
     try {
-      plugin = await sr();
+      plugin = (await sr()).p;
       const { available } = await plugin.available();
       if (!available) { finish(null, 'unsupported'); return; }
       let perm = await plugin.checkPermissions();
@@ -68,7 +71,7 @@ let speakToken = 0;
 let arLang: string | null = null;
 async function arabicTag(): Promise<string> {
   if (arLang) return arLang;
-  const t = await tts();
+  const t = (await tts()).p;
   for (const l of ['ar-AE', 'ar-SA', 'ar']) {
     try { if ((await t.isLanguageSupported({ lang: l })).supported) { arLang = l; return l; } } catch { /* next */ }
   }
@@ -82,7 +85,7 @@ export function nativeSpeak(text: string, lang: AiLang, cb: { start?(): void; en
   const fin = () => { if (!ended && token === speakToken) { ended = true; cb.end?.(); } else ended = true; };
   (async () => {
     try {
-      const t = await tts();
+      const t = (await tts()).p;
       const tag = lang === 'ar' ? await arabicTag() : 'en-GB';
       if (token !== speakToken) return;
       cb.start?.();
@@ -94,7 +97,7 @@ export function nativeSpeak(text: string, lang: AiLang, cb: { start?(): void; en
 
 export function nativeStopSpeaking() {
   speakToken++;
-  tts().then((t) => t.stop()).catch(() => { /* ignore */ });
+  tts().then((t) => t.p.stop()).catch(() => { /* ignore */ });
 }
 
 /**
@@ -105,7 +108,7 @@ export function nativeStopSpeaking() {
 export function iosListen(language: string, cb: Cb, hold: boolean) {
   let done = false, text = '';
   let silence: ReturnType<typeof setTimeout> | null = null;
-  let plugin: Awaited<ReturnType<typeof sr>> | null = null;
+  let plugin: Awaited<ReturnType<typeof sr>>["p"] | null = null;
   let sub: { remove(): Promise<void> } | null = null;
   const cleanup = () => {
     if (silence) clearTimeout(silence);
@@ -128,7 +131,7 @@ export function iosListen(language: string, cb: Cb, hold: boolean) {
   };
   (async () => {
     try {
-      plugin = await sr();
+      plugin = (await sr()).p;
       const { available } = await plugin.available();
       if (!available) { finish('unsupported'); return; }
       let perm = await plugin.checkPermissions();
