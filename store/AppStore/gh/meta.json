@@ -1,0 +1,35 @@
+{
+ "bundleId": "ae.bahrna.app",
+ "version": "0.11.0",
+ "copyright": "2026 Abdulla Altenaiji",
+ "privacyUrl": "https://bahrna.vercel.app/privacy",
+ "supportUrl": "https://bahrna.vercel.app",
+ "marketingUrl": "https://bahrna.vercel.app",
+ "contentRights": "USES_THIRD_PARTY_CONTENT",
+ "review": {
+  "contactFirstName": "Abdulla",
+  "contactLastName": "Altenaiji",
+  "contactPhone": "+971 50261188",
+  "contactEmail": "2661188@gmail.com",
+  "demoAccountRequired": false,
+  "notes": "Bahrna is a marine planning and awareness aid for boaters and fishermen in UAE waters. No account or login is needed; all features are available right away.\n\nBackground location: used only after the user taps \"Start trip\" (Navigate tab) or starts route guidance / the anchor alarm, to keep recording the track and give off-course, arrival and anchor-drag alerts while the screen is locked. iOS shows the location indicator during this time, and tracking stops when the user ends the trip. Location data stays on the device.\n\nMicrophone and speech recognition: used only when the user taps the \"Ask Bahrna\" button to ask a question by voice. Camera/photos: only to attach a photo to the user's private catch log.\n\nData: marine forecasts from Open-Meteo; maps from OpenStreetMap/OpenSeaMap. The app does not collect personal data."
+ },
+ "locales": {
+  "en-US": {
+   "name": "Bahrna – بحرنا",
+   "subtitle": "UAE tides, wind & fishing",
+   "promotionalText": "Plan your day at sea: tides, wind, waves, fishing times and GPS trips for UAE waters, in English and Arabic.",
+   "description": "Bahrna is a marine companion for boaters, fishermen and sea-sports lovers in UAE waters — in English and Arabic.\n\nTODAY AT SEA\n• Wind, gusts, waves, tide and weather for spots along the UAE coast\n• \"Coming up\" — plain-language changes in the next 12 hours (wind rising, fog, storms)\n• Weather board: temperature, humidity, visibility, pressure trend, air quality, UV, sun and sea\n• Every figure is labelled forecast or estimate, with the time it was updated\n\nFISHING\n• Fishing score and best fishing windows from tide, light, wind and moon\n• Private catch log: species, size, bait, technique, photo and the conditions at the time\n• You choose how precisely a catch location is saved — exact, area only, or not at all\n\nON THE WATER\n• Trip briefing before you leave: conditions, tide, fishing window, fuel and checklist\n• GPS trip recording that keeps working with the screen locked (iOS shows the location indicator while it runs)\n• Return to Start along your recorded track, with distance, bearing, time to go and ETA\n• Waypoints, routes and go-to guidance with off-course and arrival alerts\n• Anchor-drag alarm, also as a phone notification\n• After the trip: distance, moving time, stops, estimated fuel, notes and a summary to share\n\nSAFETY\n• Safety page: UAE emergency numbers (996, 999, 998, 997) one tap away, your position with accuracy, share location only after you confirm, Emergency mode\n• Pre-departure checklists for boating, fishing, jet ski, kayak, sailing, diving and more\n• Lessons: knots, anchoring, docking, man overboard, Mayday, VHF basics, GPS accuracy, engine-failure checks\n\nMY BOAT\n• Boat profile, fuel level and range (estimates), maintenance log with reminders\n\nASK BAHRNA — VOICE CAPTAIN\n• Hold the button and ask in English or Gulf Arabic: \"Where am I?\", \"When is high tide?\", \"كم باقي على البيت؟\"\n• Navigation answers are worked out on your phone and work offline\n• Bahrna always asks before changing your navigation or saved data\n\nPRIVATE BY DESIGN\n• No account, no ads, no tracking. Trips, catches and your boat details stay on your phone.\n\nIMPORTANT: Bahrna is a planning and awareness aid. It does not replace certified marine navigation equipment, official charts, official weather warnings or a VHF radio, and it never contacts rescue services for you. In an emergency call the Coast Guard (996) directly.",
+   "keywords": "boat,fishing,tide,tides,marine,weather,wind,waves,UAE,Dubai,GPS,navigation,sea,anchor,kayak,jet ski",
+   "shots": "store/appstore/en"
+  },
+  "ar-SA": {
+   "name": "بحرنا – Bahrna",
+   "subtitle": "المد والرياح والصيد بالإمارات",
+   "promotionalText": "خطط ليومك في البحر: المد والرياح والموج وأوقات الصيد وتسجيل الرحلات في مياه الإمارات، بالعربي والإنجليزي.",
+   "description": "بحرنا رفيقك في البحر لأصحاب القوارب والصيادين ومحبي الرياضات البحرية في مياه الإمارات — بالعربي والإنجليزي.\n\nالبحر اليوم\n• الرياح والهبات والموج والمد والطقس لمواقع على ساحل الإمارات\n• «القادم» — التغيّرات المتوقعة خلال 12 ساعة بكلام واضح (اشتداد الرياح، الضباب، العواصف)\n• لوحة الطقس: الحرارة والرطوبة والرؤية واتجاه الضغط وجودة الهواء والأشعة فوق البنفسجية والشمس والبحر\n• كل رقم موضّح إذا كان توقعات أو تقدير، مع وقت التحديث\n\nالصيد\n• تقييم الصيد وأفضل الأوقات حسب المد والضوء والرياح والقمر\n• سجل صيد خاص: النوع والمقاس والطُعم والطريقة والصورة والأحوال وقتها\n• أنت تختار دقة حفظ موقع الصيدة — دقيق، أو المنطقة فقط، أو بدون حفظ\n\nفي البحر\n• ملخص قبل الانطلاق: الأحوال والمد ووقت الصيد والوقود وقائمة التحقق\n• تسجيل الرحلة بالـ GPS ويستمر والشاشة مقفلة (يظهر مؤشر الموقع أثناء التشغيل)\n• العودة لنقطة البداية على مسارك المسجّل مع المسافة والاتجاه والوقت المتبقي ووقت الوصول\n• نقاط ومسارات وتوجيه مع تنبيهات الانحراف والوصول\n• إنذار سحب المرساة، وأيضاً كإشعار على الهاتف\n• بعد الرحلة: المسافة ووقت الحركة والتوقفات والوقود التقديري والملاحظات وملخص للمشاركة\n\nالسلامة\n• صفحة السلامة: أرقام الطوارئ في الإمارات (996، 999، 998، 997) بضغطة، موقعك مع الدقة، ومشاركة الموقع فقط بعد تأكيدك، ووضع الطوارئ\n• قوائم تجهيز قبل الانطلاق للقوارب والصيد والجت سكي والكاياك والإبحار والغوص وغيرها\n• دروس: العقد، الإرساء، الرسو، سقوط شخص في البحر، نداء الاستغاثة، أساسيات اللاسلكي، دقة GPS، فحص تعطل المحرك\n\nقاربي\n• ملف القارب، كمية الوقود والمدى (تقديري)، وسجل صيانة مع تذكير\n\nاسأل بحرنا — القبطان الصوتي\n• اضغط الزر واسأل بالعربي أو الإنجليزي: «وين موقعي؟»، «متى المد العالي؟»، «كم باقي على البيت؟»\n• إجابات الملاحة تُحسب في هاتفك وتشتغل بدون إنترنت\n• بحرنا يستأذنك دائماً قبل أي تغيير على الملاحة أو البيانات المحفوظة\n\nخصوصيتك أولاً\n• بدون حساب وبدون إعلانات وبدون تتبع. رحلاتك وصيدك وبيانات قاربك تبقى في هاتفك.\n\nتنبيه: بحرنا أداة مساعدة للتخطيط والوعي، ولا يغني عن أجهزة الملاحة البحرية المعتمدة أو الخرائط الرسمية أو تحذيرات الطقس الرسمية أو جهاز VHF، ولا يتصل بخدمات الإنقاذ نيابة عنك. في الطوارئ اتصل بخفر السواحل (996) مباشرة.",
+   "keywords": "بحر,صيد,قارب,مد,جزر,رياح,موج,طقس,الإمارات,دبي,ملاحة,GPS,مرساة,كاياك,جت سكي,boat,fishing",
+   "shots": "store/appstore/ar"
+  }
+ }
+}
