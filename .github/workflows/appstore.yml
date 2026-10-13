@@ -29,5 +29,8 @@ jobs:
         run: |
           printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/key.p8"
           export ASC_KEY_FILE="$RUNNER_TEMP/key.p8"
+          mkdir -p store/appstore
+          sed -e 's#store/appstore/en"#store/AppStore/iphone-en"#' -e 's#store/appstore/ar"#store/AppStore/iphone-ar"#' store/AppStore/gh/meta.json > store/appstore/meta.json
+          grep '"shots"' store/appstore/meta.json
           python store/AppStore/gh/asc.py ${{ inputs.submit && '--submit' || '' }}
           rm -f "$RUNNER_TEMP/key.p8"
