@@ -8,7 +8,7 @@ to App Review. Runs on GitHub (workflow "App Store page") with the ASC_* secrets
 Every step prints what it did; a step that Apple refuses is reported and the script
 carries on, so one run shows everything that still needs attention.
 """
-import hashlib, json, os, sys, time, glob
+import hashlib, json, os, re, sys, time, glob
 import jwt, requests
 
 API = 'https://api.appstoreconnect.apple.com/v1'
@@ -152,28 +152,32 @@ for loc, m in META['locales'].items():
 # ---------- age rating: nothing objectionable in Bahrna ----------
 def age_rating():
     decl = call('GET', f'/appInfos/{INFO}/ageRatingDeclaration')['data']
+    print('     age fields now:', json.dumps(decl['attributes'])[:900])
     attrs = {}
     for k, v in decl['attributes'].items():
-        if k in ('ageRatingOverride', 'koreaAgeRatingOverride', 'ageRatingOverrideV2'):
-            attrs[k] = 'NONE'
-        elif k in ('kidsAgeBand', 'developerAgeRatingInfoUrl'):
+        if k in ('kidsAgeBand', 'developerAgeRatingInfoUrl', 'ageRatingOverride', 'koreaAgeRatingOverride', 'ageRatingOverrideV2'):
             continue
-        elif isinstance(v, bool) or k.startswith('is') or k in (
-                'gambling', 'lootBox', 'unrestrictedWebAccess', 'messagingAndChat', 'parentalControls',
-                'ageAssurance', 'userGeneratedContent', 'advertising', 'healthOrWellnessTopics'):
+        if isinstance(v, bool) or k.startswith('is') or k in BOOL_AGE:
             attrs[k] = False
         else:
             attrs[k] = 'NONE'
-    try:
-        call('PATCH', f"/ageRatingDeclarations/{decl['id']}", {'data': {'type': 'ageRatingDeclarations', 'id': decl['id'], 'attributes': attrs}})
-    except RuntimeError as e:
-        # drop fields Apple refuses one by one
-        for k in list(attrs):
-            try:
-                call('PATCH', f"/ageRatingDeclarations/{decl['id']}", {'data': {'type': 'ageRatingDeclarations', 'id': decl['id'], 'attributes': {k: attrs[k]}}})
-            except RuntimeError as e2:
-                print(f'     age field {k}: {e2}')
-    return f'{len(attrs)} answers'
+    for _ in range(4):
+        try:
+            call('PATCH', f"/ageRatingDeclarations/{decl['id']}", {'data': {'type': 'ageRatingDeclarations', 'id': decl['id'], 'attributes': attrs}})
+            return f'{len(attrs)} answers'
+        except RuntimeError as e:
+            msg = str(e)
+            print('     age rating refused:', msg[:900])
+            bad = set(re.findall(r"attribute '?([A-Za-z]+)'?", msg)) & set(attrs)
+            if not bad:
+                raise
+            for k in bad:  # flip the type Apple expects
+                attrs[k] = 'NONE' if attrs[k] is False else False
+    raise RuntimeError('age rating not accepted')
+
+
+BOOL_AGE = {'gambling', 'lootBox', 'unrestrictedWebAccess', 'messagingAndChat', 'parentalControls', 'ageAssurance',
+            'userGeneratedContent', 'advertising', 'healthOrWellnessTopics', 'seventeenPlus', 'gamblingAndContests'}
 
 
 step('age rating (all "None")', age_rating)
