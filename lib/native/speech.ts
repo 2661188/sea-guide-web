@@ -4,7 +4,28 @@
 import type { AiLang } from '@/lib/ai/speakable';
 import { isIOSApp } from '@/lib/native/platform';
 
-type Cb = { partial(t: string): void; final(t: string): void; error(code: string): void; end(): void };
+type Cb = { partial(t: string): void; final(t: string, alts?: string[]): void; error(code: string): void; end(): void };
+
+// Arabic: phones support different Arabic recognisers (iPhone usually ar-SA; Android many).
+// Use the closest one the phone actually has, Gulf variants first.
+const AR_PREF = ['ar-AE', 'ar-SA', 'ar-KW', 'ar-QA', 'ar-BH', 'ar-OM', 'ar'];
+let arRec: string | null = null;
+async function recogniserLang(p: { getSupportedLanguages(): Promise<{ languages?: string[] }> }, language: string): Promise<string> {
+  if (!language.startsWith('ar')) return language;
+  if (arRec) return arRec;
+  try {
+    const { languages = [] } = await p.getSupportedLanguages();
+    const have = languages.map((l) => l.replace('_', '-'));
+    for (const want of AR_PREF) {
+      const hit = have.find((l) => l.toLowerCase() === want.toLowerCase());
+      if (hit) { arRec = hit; return hit; }
+    }
+    const any = have.find((l) => l.toLowerCase().startsWith('ar'));
+    if (any) { arRec = any; return any; }
+  } catch { /* list not available: keep the requested tag */ }
+  arRec = language;
+  return language;
+}
 
 // A Capacitor plugin object answers to every property name, including "then", so it must
 // never be awaited or returned straight from an async function: that promise never settles
@@ -30,11 +51,12 @@ export function mapSttError(msg: string): string {
 export function nativeListen(language: string, cb: Cb, hold: boolean) {
   if (isIOSApp()) return iosListen(language, cb, hold);
   let done = false;
+  let alts: string[] = [];
   const finish = (text: string | null, err?: string) => {
     if (done) return;
     done = true;
     if (err) cb.error(err);
-    else if (text) cb.final(text);
+    else if (text) cb.final(text, alts);
     cb.end();
   };
   let plugin: Awaited<ReturnType<typeof sr>>["p"] | null = null;
@@ -49,8 +71,10 @@ export function nativeListen(language: string, cb: Cb, hold: boolean) {
       if (done) return; // released before permission came back
       // partialResults:false: the call resolves with the result or rejects with the error.
       // (With partial results on, this plugin version never reports errors.)
-      const res = await plugin.start({ language, maxResults: 3, partialResults: false, popup: false });
-      const text = (res.matches ?? [])[0]?.trim() ?? '';
+      const lang = await recogniserLang(plugin, language);
+      const res = await plugin.start({ language: lang, maxResults: 5, partialResults: false, popup: false });
+      alts = (res.matches ?? []).map((m) => m.trim()).filter(Boolean);
+      const text = alts[0] ?? '';
       if (text) cb.partial(text);
       finish(text || null, text ? undefined : 'no-speech');
     } catch (e) {
@@ -107,6 +131,8 @@ export function nativeStopSpeaking() {
  */
 export function iosListen(language: string, cb: Cb, hold: boolean) {
   let done = false, text = '';
+  let alts: string[] = [];
+  const pause = language.startsWith('ar') ? 2300 : 1600; // Arabic speakers pause longer mid-sentence
   let silence: ReturnType<typeof setTimeout> | null = null;
   let plugin: Awaited<ReturnType<typeof sr>>["p"] | null = null;
   let sub: { remove(): Promise<void> } | null = null;
@@ -120,7 +146,7 @@ export function iosListen(language: string, cb: Cb, hold: boolean) {
     done = true;
     cleanup();
     if (err) cb.error(err);
-    else if (text) cb.final(text);
+    else if (text) cb.final(text, alts);
     else cb.error('no-speech');
     cb.end();
   };
@@ -142,10 +168,12 @@ export function iosListen(language: string, cb: Cb, hold: boolean) {
         const t = (d.matches ?? [])[0]?.trim() ?? '';
         if (!t || done) return;
         text = t;
+        alts = (d.matches ?? []).map((m) => m.trim()).filter(Boolean);
         cb.partial(t);
-        armSilence(1600);
+        armSilence(pause);
       });
-      await plugin.start({ language, maxResults: 3, partialResults: true, popup: false });
+      const lang = await recogniserLang(plugin, language);
+      await plugin.start({ language: lang, maxResults: 5, partialResults: true, popup: false });
       armSilence(6000); // nothing said at all
     } catch (e) {
       finish(mapSttError(e instanceof Error ? e.message : String(e)));

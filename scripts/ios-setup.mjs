@@ -5,7 +5,7 @@
 //  - iPhone only, portrait only, 64-bit devices
 //  - "no special encryption" answer for App Store export rules
 //  - app icon without transparency (App Store rejects icons with an alpha channel)
-import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const APP = 'ios/App/App';
@@ -55,6 +55,21 @@ p = p.replace(/(<key>CFBundleDisplayName<\/key>\s*<string>)[^<]*(<\/string>)/, '
 writeFileSync(PLIST, p);
 console.log('Info.plist ready');
 
+// Localised permission texts in en.lproj / ar.lproj. Having an ar.lproj folder in the app
+// is also what makes the App Store list Arabic as a supported language.
+const usageEn = {}, usageAr = {};
+for (const [k, v] of Object.entries(usage)) {
+  const cut = v.search(/[\u0600-\u06FF]/);
+  usageEn[k] = v.slice(0, cut).trim();
+  usageAr[k] = v.slice(cut).trim();
+}
+const strings = (o) => Object.entries(o).map(([k, v]) => `"${k}" = "${v.replace(/"/g, '\\"')}";`).join('\n') + '\n';
+for (const [dir, o] of [['en.lproj', { ...usageEn, CFBundleDisplayName: 'Bahrna' }], ['ar.lproj', { ...usageAr, CFBundleDisplayName: 'بحرنا' }]]) {
+  mkdirSync(join(APP, dir), { recursive: true });
+  writeFileSync(join(APP, dir, 'InfoPlist.strings'), strings(o));
+}
+console.log('en.lproj + ar.lproj written');
+
 // Apple privacy manifest: no tracking, no data collected; reasons for the system APIs
 // the app framework uses (settings storage, file dates, boot time, free space).
 const reason = (cat, code) => `\t\t<dict>\n\t\t\t<key>NSPrivacyAccessedAPIType</key>\n\t\t\t<string>${cat}</string>\n\t\t\t<key>NSPrivacyAccessedAPITypeReasons</key>\n\t\t\t<array><string>${code}</string></array>\n\t\t</dict>\n`;
@@ -91,6 +106,21 @@ if (existsSync(PBX)) {
     x = x.replace(`\t\t\t\t${cfgBuild[1]} /* capacitor.config.json in Resources */,\n`, (m) => m + `\t\t\t\t${B} /* PrivacyInfo.xcprivacy in Resources */,\n`);
     if ((x.match(/PrivacyInfo\.xcprivacy/g) || []).length !== 6) { console.error('Could not add PrivacyInfo.xcprivacy to the Xcode project'); process.exit(1); }
     console.log('Privacy manifest added');
+  }
+  // en.lproj and ar.lproj as folder references copied into the app
+  if (!x.includes('ar.lproj')) {
+    const cfgRef = x.match(/(\w{24}) \/\* capacitor\.config\.json \*\/ = \{isa = PBXFileReference/);
+    const cfgBuild = x.match(/(\w{24}) \/\* capacitor\.config\.json in Resources \*\/ = \{isa = PBXBuildFile/);
+    if (!cfgRef || !cfgBuild) { console.error('Xcode project layout changed: cannot add lproj folders'); process.exit(1); }
+    for (const [dir, F, B] of [['en.lproj', 'B4A11A0E2C00000000000003', 'B4A11A0E2C00000000000004'], ['ar.lproj', 'B4A11A0E2C00000000000005', 'B4A11A0E2C00000000000006']]) {
+      x = x.replace('/* End PBXBuildFile section */', `\t\t${B} /* ${dir} in Resources */ = {isa = PBXBuildFile; fileRef = ${F} /* ${dir} */; };\n/* End PBXBuildFile section */`);
+      x = x.replace('/* End PBXFileReference section */', `\t\t${F} /* ${dir} */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ${dir}; sourceTree = "<group>"; };\n/* End PBXFileReference section */`);
+      x = x.replace(`\t\t\t\t${cfgRef[1]} /* capacitor.config.json */,\n`, (m) => m + `\t\t\t\t${F} /* ${dir} */,\n`);
+      x = x.replace(`\t\t\t\t${cfgBuild[1]} /* capacitor.config.json in Resources */,\n`, (m) => m + `\t\t\t\t${B} /* ${dir} in Resources */,\n`);
+    }
+    if ((x.match(/ar\.lproj/g) || []).length !== 6) { console.error('Could not add ar.lproj to the Xcode project'); process.exit(1); }
+    x = x.replace(/knownRegions = \(([^)]*)\);/, (m, inner) => (/\bar\b/.test(inner) ? m : `knownRegions = (${inner.trimEnd()}\n\t\t\t\tar,\n\t\t\t);`));
+    console.log('Localisations added: en, ar');
   }
   writeFileSync(PBX, x);
   console.log('Xcode project: iPhone only');

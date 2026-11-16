@@ -59,7 +59,7 @@ const has = (s: string, re: RegExp) => re.test(s);
 const EMERGENCY = /\b(mayday|sos|emergency|help me(?! (plan|with|find|to|understand|save|set|choose|pick))|(i|we) need help|^help$|sinking|taking (on )?water|man overboard|person overboard|fire on board|capsiz|engine (has )?(stopped|died|failed|dead|broke|won'?t start|is not starting)|(we'?re|we are|i'?m|i am|boat is) drifting|lost at sea|injur)|ماي ?داي|طواري|(نحتاج|ابي|ابغي|نبي|نبغي|اريد|بغيت) ?(مساعده|فزعه)|^مساعده|ساعدو(ني|نا)|الحقو(ني|نا)|فزعه|نغرق|يغرق|غرق|حريق|(عطلت|خربت|وقفت|طفت|تعطلت|انطفت|عطل|خربان|خربانه|معطل|معطله) ?(ال)?(ماكينه|مكينه|المكينه|الماكينه|محرك|المحرك|موتور|الموتور|مكاين)|(ال)?(ماكينه|مكينه|محرك|موتور) (عطلت|خربت|وقفت|طفت|تعطلت|انطفت|خربانه|معطله)|(ن|ي|ا)?نجرف|انجراف|سقط .*(بحر|ماي)|طاح .*(بحر|ماي)|انقلب/;
 
 const STOP = /^(stop|stop talking|quiet|be quiet|shut up|enough|cancel that|ok stop|اسكت|بس|خلاص|وقف الكلام|سكوت|كفايه|وقف)$/;
-const REPEAT = /\b(say (that|it) again|repeat( that)?|come again|pardon|what did you say|again please)\b|^again$|^what$|عيد|كرر|مره ثانيه|مره ثانيه|ما سمعت|ما فهمت|شو قلت|ايش قلت/;
+const REPEAT = /\b(say (that|it) again|repeat( that)?|come again|pardon|what did you say|again please)\b|^again$|^what$|عيد|كرر|مره ثانيه|مره ثانيه|ما سمعت|ما فهمت|شو قلت|ايش قلت|وش قلت|شنو قلت/;
 const YES = /^(yes|yeah|yep|yup|sure|ok|okay|confirm|confirmed|do it|go ahead|please do|affirmative|correct|start|save|start it|save it|go|yes please|نعم|اي|ايه|ايوه|ايوا|اكيد|تمام|اوكي|اوك|يلا|زين|موافق|سو|سوها|احفظ|احفظه|ابدا|ابدا|بدا|شغل|صح|طيب|اي نعم|اي اكيد|يب)( please| لو سمحت| بليز)?$/;
 const NO = /^(no|nope|nah|cancel|don'?t|do not|never ?mind|not now|stop it|abort|لا|لاء|لا|لا شكرا|لا خلاص|الغ|الغي|الغاء|كنسل|خلها|خله|بلاش|مب لازم|مو لازم|ما ابي|ما ابغي|لا تسوي)$/;
 
@@ -167,7 +167,7 @@ export function parse(raw: string, pendingConfirm = false): Parsed {
   if (has(s, /\b(stop|end|finish|terminate)\b.*\b(record|recording|trip|tracking|track|logging)\b|(وقف|اوقف|انهي|انه|خلص|سكر|طف) ?(ال)?(تسجيل|رحله|الرحله|التتبع)/)) return { ...base, intent: 'endTrip' };
 
   // 5. Explicit commands with a verb (save / go back) — not when phrased as a question.
-  const isQ = has(s, /\b(how|what|what'?s|where|when|which|is|are|do|does|did|can|tell me)\b|(^|\s)(كم|وين|متي|شو|ايش|شلون|كيف|هل|قد ايش|چم)(\s|$)/) || /[?؟]\s*$/.test(raw); // Gulf Arabic often asks without a question word: "باجر زين للصيد؟"
+  const isQ = has(s, /\b(how|what|what'?s|where|when|which|is|are|do|does|did|can|tell me)\b|(^|\s)(كم|وين|متي|شو|ايش|شلون|كيف|هل|قد ايش|چم|وش|ويش|شنو|شنهو|اشلون|كيفه|كيفها)(\s|$)/) || /[?؟]\s*$/.test(raw); // Gulf Arabic often asks without a question word: "باجر زين للصيد؟"
   if (has(s, /\b(save|mark|store|add|drop|remember)\b.*\b(this|here|location|spot|place|position|point|waypoint|mark)\b|\bmark (this|here|it)\b|\bsave (it|this)\b|(احفظ|سجل|خزن|علم|ثبت|حط) ?(هالمكان|هذا المكان|المكان|الموقع|هالموقع|هذا الموقع|هني|هنا|النقطه|نقطه|علامه)|(احفظه|سجله|خزنه) |^(احفظه|سجله|خزنه)$|هذا المكان (حق|للصيد|لل)/)) {
     const nm = s.match(/\b(?:as|called|named|name it)\s+['"]?([a-z0-9][a-z0-9 ]{1,30})['"]?$/) || s.match(/(?:باسم|اسمه|سمه|سميه)\s+(.{2,30})$/);
     let wpName = nm ? nm[1].trim().replace(/^(a|an|the|my)\s+/, '') : undefined;

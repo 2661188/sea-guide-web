@@ -8,6 +8,15 @@
 import type { AiLang } from './speakable';
 import { isNative } from '@/lib/native/platform';
 import { nativeListen, nativeSpeak, nativeStopSpeaking } from '@/lib/native/speech';
+import { parse } from './intents';
+
+/** Speech recognisers return several guesses. Prefer the first one Bahrna understands
+ *  (this helps most with Arabic, where the top guess is often a near-miss). */
+export function bestTranscript(first: string, alts: string[] = []): string {
+  const all = [first, ...alts].map((s) => s.trim()).filter(Boolean);
+  const uniq = all.filter((s, i) => all.indexOf(s) === i);
+  return uniq.find((s) => parse(s).intent !== 'unknown') ?? uniq[0] ?? first;
+}
 
 type Rec = {
   lang: string; interimResults: boolean; continuous: boolean; maxAlternatives: number;
@@ -33,7 +42,7 @@ export interface Listener { stop(): void; abort(): void }
 
 /** Start listening. `hold` keeps listening until stop() (push-to-talk); otherwise it stops at the end of speech. */
 export function listen(lang: AiLang, cb: { partial(t: string): void; final(t: string): void; error(code: string): void; end(): void }, hold: boolean): Listener | null {
-  if (isNative()) return nativeListen(recLang(lang), cb, hold);
+  if (isNative()) return nativeListen(recLang(lang), { ...cb, final: (t, alts) => cb.final(bestTranscript(t, alts)) }, hold);
   const w = window as unknown as { SpeechRecognition?: new () => Rec; webkitSpeechRecognition?: new () => Rec };
   const C = w.SpeechRecognition || w.webkitSpeechRecognition;
   if (!C) { cb.error('unsupported'); return null; }
@@ -43,6 +52,7 @@ export function listen(lang: AiLang, cb: { partial(t: string): void; final(t: st
   r.continuous = hold;
   r.maxAlternatives = 3;
   let text = '', done = false, stopping = false;
+  let alts: string[] = [];
   r.onresult = (e) => {
     let fin = '', inter = '';
     for (let i = 0; i < e.results.length; i++) {
@@ -50,10 +60,13 @@ export function listen(lang: AiLang, cb: { partial(t: string): void; final(t: st
       if (res.isFinal) fin += res[0].transcript; else inter += res[0].transcript;
     }
     text = (fin + ' ' + inter).trim();
+    // Alternatives for a single-phrase result (the common case for a short question).
+    const last = e.results[e.results.length - 1];
+    alts = e.results.length === 1 && last ? Array.from({ length: last.length }, (_, k) => last[k].transcript) : [];
     cb.partial(text);
   };
   r.onerror = (e) => { if (e.error === 'aborted' || (e.error === 'no-speech' && stopping)) return; cb.error(e.error); };
-  r.onend = () => { if (done) return; done = true; if (text) cb.final(text); cb.end(); };
+  r.onend = () => { if (done) return; done = true; if (text) cb.final(bestTranscript(text, alts)); cb.end(); };
   try { r.start(); } catch { cb.error('start'); return null; }
   return {
     stop: () => { stopping = true; try { r.stop(); } catch { /* already stopped */ } },
