@@ -1,0 +1,188 @@
+// Speech inside the Android app: the phone's own speech recogniser (Google speech
+// services) and text-to-speech engine, through Capacitor plugins. The microphone is
+// only open between pressing and releasing the button (or one short phrase after a tap).
+import type { AiLang } from '@/lib/ai/speakable';
+import { isIOSApp } from '@/lib/native/platform';
+
+type Cb = { partial(t: string): void; final(t: string, alts?: string[]): void; error(code: string): void; end(): void };
+
+// Arabic: phones support different Arabic recognisers (iPhone usually ar-SA; Android many).
+// Use the closest one the phone actually has, Gulf variants first.
+const AR_PREF = ['ar-AE', 'ar-SA', 'ar-KW', 'ar-QA', 'ar-BH', 'ar-OM', 'ar'];
+let arRec: string | null = null;
+async function recogniserLang(p: { getSupportedLanguages(): Promise<{ languages?: string[] }> }, language: string): Promise<string> {
+  if (!language.startsWith('ar')) return language;
+  if (arRec) return arRec;
+  try {
+    const { languages = [] } = await p.getSupportedLanguages();
+    const have = languages.map((l) => l.replace('_', '-'));
+    for (const want of AR_PREF) {
+      const hit = have.find((l) => l.toLowerCase() === want.toLowerCase());
+      if (hit) { arRec = hit; return hit; }
+    }
+    const any = have.find((l) => l.toLowerCase().startsWith('ar'));
+    if (any) { arRec = any; return any; }
+  } catch { /* list not available: keep the requested tag */ }
+  arRec = language;
+  return language;
+}
+
+// A Capacitor plugin object answers to every property name, including "then", so it must
+// never be awaited or returned straight from an async function: that promise never settles
+// (this froze GPS and voice inside the app). The loaders below return it inside a box.
+async function sr() { return { p: (await import('@capacitor-community/speech-recognition')).SpeechRecognition }; }
+async function tts() { return { p: (await import('@capacitor-community/text-to-speech')).TextToSpeech }; }
+
+/** Maps the Android recogniser's messages to the same codes the web recogniser uses. */
+export function mapSttError(msg: string): string {
+  const m = (msg || '').toLowerCase();
+  if (m.includes('permission')) return 'not-allowed';
+  if (m.includes('network') || m.includes('server')) return 'network';
+  if (m.includes('no match') || m.includes('no speech') || m.includes("didn't understand")) return 'no-speech';
+  if (m.includes('not available')) return 'unsupported';
+  if (m.includes('busy')) return 'busy';
+  return 'stt-error';
+}
+
+/**
+ * Listen once. `hold` = push-to-talk (listening ends when the button is released and
+ * stop() is called); otherwise Android ends it at the end of the phrase.
+ */
+export function nativeListen(language: string, cb: Cb, hold: boolean) {
+  if (isIOSApp()) return iosListen(language, cb, hold);
+  let done = false;
+  let alts: string[] = [];
+  const finish = (text: string | null, err?: string) => {
+    if (done) return;
+    done = true;
+    if (err) cb.error(err);
+    else if (text) cb.final(text, alts);
+    cb.end();
+  };
+  let plugin: Awaited<ReturnType<typeof sr>>["p"] | null = null;
+  (async () => {
+    try {
+      plugin = (await sr()).p;
+      const { available } = await plugin.available();
+      if (!available) { finish(null, 'unsupported'); return; }
+      let perm = await plugin.checkPermissions();
+      if (perm.speechRecognition !== 'granted') perm = await plugin.requestPermissions();
+      if (perm.speechRecognition !== 'granted') { finish(null, 'not-allowed'); return; }
+      if (done) return; // released before permission came back
+      // partialResults:false: the call resolves with the result or rejects with the error.
+      // (With partial results on, this plugin version never reports errors.)
+      const lang = await recogniserLang(plugin, language);
+      const res = await plugin.start({ language: lang, maxResults: 5, partialResults: false, popup: false });
+      alts = (res.matches ?? []).map((m) => m.trim()).filter(Boolean);
+      const text = alts[0] ?? '';
+      if (text) cb.partial(text);
+      finish(text || null, text ? undefined : 'no-speech');
+    } catch (e) {
+      finish(null, mapSttError(e instanceof Error ? e.message : String(e)));
+    }
+  })();
+  // Safety net: never leave the microphone state "listening" for ever.
+  setTimeout(() => { if (!done) { try { plugin?.stop(); } catch { /* ignore */ } } }, hold ? 60e3 : 12e3);
+  return {
+    // stop(): Android then delivers the final result (resolve above). The plugin's stop()
+    // promise itself never settles, so it is not awaited.
+    stop: () => { try { plugin?.stop(); } catch { /* ignore */ } },
+    abort: () => { try { plugin?.stop(); } catch { /* ignore */ } finish(null); },
+  };
+}
+
+let speakToken = 0;
+let arLang: string | null = null;
+async function arabicTag(): Promise<string> {
+  if (arLang) return arLang;
+  const t = (await tts()).p;
+  for (const l of ['ar-AE', 'ar-SA', 'ar']) {
+    try { if ((await t.isLanguageSupported({ lang: l })).supported) { arLang = l; return l; } } catch { /* next */ }
+  }
+  arLang = 'ar';
+  return arLang;
+}
+
+export function nativeSpeak(text: string, lang: AiLang, cb: { start?(): void; end?(): void }) {
+  const token = ++speakToken;
+  let ended = false;
+  const fin = () => { if (!ended && token === speakToken) { ended = true; cb.end?.(); } else ended = true; };
+  (async () => {
+    try {
+      const t = (await tts()).p;
+      const tag = lang === 'ar' ? await arabicTag() : 'en-GB';
+      if (token !== speakToken) return;
+      cb.start?.();
+      await t.speak({ text, lang: tag, rate: lang === 'ar' ? 0.95 : 1.0, pitch: 1, volume: 1, queueStrategy: 0 });
+    } catch { /* no voice for this language: the answer is still on screen */ }
+    fin();
+  })();
+}
+
+export function nativeStopSpeaking() {
+  speakToken++;
+  tts().then((t) => t.p.stop()).catch(() => { /* ignore */ });
+}
+
+/**
+ * iPhone: Apple's recogniser does not end by itself at the end of a phrase, so we take
+ * the running (partial) transcript and finish after a short silence (tap mode) or when
+ * the button is released (push-to-talk).
+ */
+export function iosListen(language: string, cb: Cb, hold: boolean) {
+  let done = false, text = '';
+  let alts: string[] = [];
+  const pause = language.startsWith('ar') ? 2300 : 1600; // Arabic speakers pause longer mid-sentence
+  let silence: ReturnType<typeof setTimeout> | null = null;
+  let plugin: Awaited<ReturnType<typeof sr>>["p"] | null = null;
+  let sub: { remove(): Promise<void> } | null = null;
+  const cleanup = () => {
+    if (silence) clearTimeout(silence);
+    try { plugin?.stop(); } catch { /* ignore */ }
+    sub?.remove().catch(() => { /* ignore */ });
+  };
+  const finish = (err?: string) => {
+    if (done) return;
+    done = true;
+    cleanup();
+    if (err) cb.error(err);
+    else if (text) cb.final(text, alts);
+    else cb.error('no-speech');
+    cb.end();
+  };
+  const armSilence = (ms: number) => {
+    if (hold) return;
+    if (silence) clearTimeout(silence);
+    silence = setTimeout(() => finish(), ms);
+  };
+  (async () => {
+    try {
+      plugin = (await sr()).p;
+      const { available } = await plugin.available();
+      if (!available) { finish('unsupported'); return; }
+      let perm = await plugin.checkPermissions();
+      if (perm.speechRecognition !== 'granted') perm = await plugin.requestPermissions();
+      if (perm.speechRecognition !== 'granted') { finish('not-allowed'); return; }
+      if (done) return;
+      sub = await plugin.addListener('partialResults', (d: { matches?: string[] }) => {
+        const t = (d.matches ?? [])[0]?.trim() ?? '';
+        if (!t || done) return;
+        text = t;
+        alts = (d.matches ?? []).map((m) => m.trim()).filter(Boolean);
+        cb.partial(t);
+        armSilence(pause);
+      });
+      const lang = await recogniserLang(plugin, language);
+      await plugin.start({ language: lang, maxResults: 5, partialResults: true, popup: false });
+      armSilence(6000); // nothing said at all
+    } catch (e) {
+      finish(mapSttError(e instanceof Error ? e.message : String(e)));
+    }
+  })();
+  setTimeout(() => finish(), hold ? 60e3 : 15e3);
+  return {
+    // Released: give the recogniser a moment to deliver the last words.
+    stop: () => { setTimeout(() => finish(), 500); },
+    abort: () => { text = ''; done = true; cleanup(); cb.end(); },
+  };
+}
